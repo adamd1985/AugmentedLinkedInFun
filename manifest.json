@@ -12,6 +12,7 @@
                 "*://www.linkedin.com/*"
             ],
             "js": [
+                "jquery-3.6.4.slim.min.js",
                 "content.js"
             ]
         }
