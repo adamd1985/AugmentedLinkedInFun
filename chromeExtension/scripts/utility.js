@@ -56,6 +56,7 @@ class LinkedInCoPilot{
    * @param {*} profiles 
    */
   async cacheFindings(profiles) {
+    console.log(JSON.stringify(profiles));
     const csvString = [
       [
         "user",
@@ -63,9 +64,9 @@ class LinkedInCoPilot{
         "titles"
       ],
       ...profiles.map(item => [
-        item.user,
-        item.posts,
-        item.titles
+        item.user?.replace(/(\r\n|\n|\r|,)/gm, ";"),
+        item.posts?.join(';').replace(/(\r\n|\n|\r|,)/gm, ";"), // Comma seperated files, cannot have commas.
+        item.titles?.replace(/(\r\n|\n|\r|,)/gm, ";"),
       ])
     ]
     .map(e => e.join(",")) 
