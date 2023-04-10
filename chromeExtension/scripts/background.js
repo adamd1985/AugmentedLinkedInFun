@@ -2,6 +2,15 @@ chrome.runtime.onInstalled.addListener(function () {
   console.log("CoPilot loaded.")
 });
 
+chrome.commands.onCommand.addListener((command) => {
+    console.log(`Command: ${command}, sending message to scrape.`);
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        // Get the current TAB.
+        chrome.tabs.sendMessage(tabs[0].id,{ cmd: "run" });  
+    });
+});
+
+
 async function getProfile() {
     // Activities are loaded by a dynamic script and might not be available
     // when the script is loaded. We try to assert it, but cannot do anything.
@@ -34,8 +43,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 .then(injectionResults => {
                     // Should have 1 parent frame.
                     let profile = injectionResults[0]?.result;
-
-                    console.log(JSON.stringify(profile))
                     return sendResponse({ profile: profile});
                 })
                 .then(() => chrome.tabs.remove(tabID))

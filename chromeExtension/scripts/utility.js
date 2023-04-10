@@ -19,13 +19,13 @@ class LinkedInCoPilot{
    */
   augmentLinkedInExperience(profiles) {
     for (let profile of profiles) {
-      $(`span:contains("${profile.user}")`).each((index, element) => {
+      $(`span:contains("${profile?.user}")`).each((index, element) => {
         $(element).text('NPC');
       })
-      $(`a:contains("${profile.user}")`).each((index, element) => {
+      $(`a:contains("${profile?.user}")`).each((index, element) => {
         $(element).text('NPC');
       })
-      $(`div:contains("${profile.user}")`).each((index, element) => {
+      $(`div:contains("${profile?.user}")`).each((index, element) => {
         $(element).text('NPC');
       })
     }
@@ -64,9 +64,9 @@ class LinkedInCoPilot{
         "titles"
       ],
       ...profiles.map(item => [
-        item.user?.replace(/(\r\n|\n|\r|,)/gm, ";"),
-        item.posts?.join(';').replace(/(\r\n|\n|\r|,)/gm, ";"), // Comma seperated files, cannot have commas.
-        item.titles?.replace(/(\r\n|\n|\r|,)/gm, ";"),
+        item?.user?.replace(/(\r\n|\n|\r|,)/gm, ";"),
+        item?.posts?.join(';').replace(/(\r\n|\n|\r|,)/gm, ";"), // Comma seperated files, cannot have commas.
+        item?.titles?.replace(/(\r\n|\n|\r|,)/gm, ";"),
       ])
     ]
     .map(e => e.join(",")) 
@@ -83,65 +83,72 @@ class LinkedInCoPilot{
    * @returns Porfile object.
    */
   async getProfilesDetailsFromLinks(links) {
+    function _scrape(profile){
+      let lnName = $("main h1", profile).text()
+      let profileObj = null;
+      if (lnName !== null && lnName.length > 0) {
+        lnName = lnName.trim();
+        console.debug(`found name: ${lnName}`);
+      }
+      // TODO: Collect Job history also, and package it in an enumerable structure
+      let posts = null;
+      $("ul.pvs-list li", profile).each((index, element) => {
+        let post = $("div.inline-show-more-text", element)?.text()?.trim();
+        if (post) {
+          if (posts === null) {
+            posts = new Array();
+          }
+          posts.push(post)
+        }
+      })
+      let titles = $("main div.text-body-medium", profile).text()
+      if (titles !== null && titles.length > 0) {
+        titles = titles.trim();
+      }
+      if ((lnName !== null && lnName !== "") && (titles !== null && titles !== "")) {
+        // TODO: create a shared object, representing the profile.
+        profileObj = {
+          user: lnName,
+          posts: posts,
+          titles: titles,
+        }
+      }
+      return profileObj;
+    }
+    
     let profiles = []
+    let calls = []
+
     for (const link of links) {
       let profile;
+
       if (this.IS_TEST !== true) {
-        
+        // TODO: Avoid rate limit and allow dynamic content to load - can it be better?
+        // Randomly wait for up to 2800ms.
+        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 2800)));
+            
         let response = await fetch(link);
         profile = await response.text();
-        
-        // TODO: Scale this to multithreaded by using promises.
-        response = await chrome.runtime.sendMessage({link: link});
-        profile = response?.profile;
+        let call = chrome.runtime.sendMessage({ link: link }).then(response => {
+          let profile = response?.profile;
+          let profileObj = null;
+          if (profile) {
+            profileObj = _scrape(profile);
+          }
+          return Promise.resolve(profileObj);
+        });
+        calls.push(call)
       }
       else {
         // Only in NodeJS env.
         const fs = require('fs').promises;
         profile = await fs.readFile("linkedInSampleProfile.html", 'utf8')
-      }
-      
-      if (!profile) {
-        // Nothing to process, skip to next.
-        continue;  
-      }
-
-      let lnName = $("main h1", profile).text()
-      if (lnName !== null && lnName.length > 0) {
-        lnName = lnName.trim();
-        console.debug(`found name: ${lnName}`);
-      }
-
-      // TODO: Collect Job history also, and package it in an enumerable structure
-
-      let posts = null;
-      $("ul.pvs-list li", profile).each((index, element) => {
-        let post = $("div.inline-show-more-text", element)?.text()?.trim();
-        if (post){
-        if (posts === null) {
-          posts = new Array();
-        }
-        posts.push(post)
-        }
-      })
-    
-      let titles = $("main div.text-body-medium", profile).text()
-      if (titles !== null && titles.length > 0) {
-        titles = titles.trim();
-      }
-      
-      // TODO: create a shared object, representing  
-      if ((lnName !== null && lnName !=="") && (titles !== null && titles !== "")) {
-        let obj = {
-          user: lnName,
-          posts: posts,
-          titles: titles,
-        }
-
-        profiles.push(obj)
+        profiles.push(_scrape(profile));
       }
     }
-    
+    if (this.IS_TEST !== true && calls.length>0) {
+      profiles = await Promise.all(calls);
+    }
     return profiles;
   }
 
@@ -151,10 +158,6 @@ class LinkedInCoPilot{
    */
   async start() {
     console.log(`The HREF our linkedIn Extension is succesfully running on: ${document?.URL}`);
-    
-    // TODO: This is not the right way to do it, but we have to make
-    // sure all dynamic content is returned.
-    await new Promise(r => setTimeout(r, 1600));
 
     // User is scrolling the site, get all profile links.
     let links = this.getAllLinks()
@@ -166,6 +169,8 @@ class LinkedInCoPilot{
     
     // Get profile information on which to classify the users.
     let profiles = await this.getProfilesDetailsFromLinks(links)
+
+    console.log(`We scraped this number of profiles: ${profiles.length}`)
 
     // cach in case of failure, we can just revert.
     this.cacheFindings(profiles)
