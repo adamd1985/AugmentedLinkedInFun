@@ -1,0 +1,66 @@
+# openapi2-functions.yaml
+swagger: "2.0"
+info:
+  title: NLP for LinkedIN Profile Classification
+  description: NLP LinkedIN server for classifying profiles.
+  version: 1.0.0
+schemes:
+  - https
+produces:
+  - application/json
+paths:
+  /profile:
+    post:
+      summary: Classify this linkedin profile
+      operationId: linkedinNLP
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: profile
+          description: The features of a profile to be classified.
+          schema:
+            type: object
+            required:
+              - descriptions
+            properties:
+              descriptions:
+                type: string
+      responses:
+        200:
+          description: A class
+          schema:
+            type: object
+            required:
+              - class
+            properties:
+              class:
+                type: string
+                description: The best class for this profile.
+              probs:
+                type: number
+                description: Probability.
+        400:
+          description: Bad request
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                description: The error message
+        403:
+          description: Forbidden request
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                description: The error message
+        500:
+          description: Internal error
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                description: The error message
