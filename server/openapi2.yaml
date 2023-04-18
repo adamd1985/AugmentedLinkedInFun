@@ -32,11 +32,11 @@ paths:
           schema:
             type: object
             required:
-              - class
+              - label
             properties:
-              class:
+              label:
                 type: string
-                description: The best class for this profile.
+                description: The best label for this profile class.
               probs:
                 type: number
                 description: Probability.
