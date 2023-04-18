@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
     MODELS_DIR = os.environ.get("MODELS_DIR")
     MODELS_DIR = (
-        MODELS_DIR if MODELS_DIR is not None else "../notebooks/models"
+        MODELS_DIR if MODELS_DIR is not None else "./notebooks/models"
     )  # Default for cloudFunctions.
     ENCODER = load(open(f"{MODELS_DIR}/labelencoder.joblib", "rb"))
     MODEL = load(open(f"{MODELS_DIR}/model.joblib", "rb"))
