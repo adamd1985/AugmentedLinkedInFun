@@ -26,6 +26,22 @@ Go to your linkedIn, open browser tools console, and see the extension traverser
 
 It will replace the names of people in your network with their classifier, showing that an extension can create an augmented experience.
 
+## versions
+
+For easy freezing of environments:
+```
+pip install pipreqs
+pip install nbconvert
+```
+
+```
+jupyter nbconvert --output-dir="./reqs" --to script my\ nb.ipynb
+cd reqs
+pipreqs --encoding utf-8
+```
+
+It will generate a good requirements.txt. Then just import it.
+
 
 # Troubleshooting
 
