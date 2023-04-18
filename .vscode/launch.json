@@ -7,14 +7,14 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
+            "name": "Node Test",
             "skipFiles": [
                 "<node_internals>/**"
             ],
             "program": "${workspaceFolder}\\testUtility.js"
         },
         {
-            "name": "Python: Flask",
+            "name": "Flask",
             "type": "python",
             "request": "launch",
             "module": "flask",
@@ -32,12 +32,12 @@
             "justMyCode": true
         },
         {
-            "name": "Python: App File",
+            "name": "Server",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}\\server\\app.py",
+            "program": "${workspaceFolder}/server/app.py",
             "env": {
-                "MODELS_DIR": "${workspaceFolder}\\notebooks\\models",
+                "MODELS_DIR": "${workspaceFolder}/notebooks/models",
             },
             "console": "integratedTerminal",
             "justMyCode": true

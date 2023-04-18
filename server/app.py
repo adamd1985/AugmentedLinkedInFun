@@ -23,10 +23,80 @@ from sklearn.svm import LinearSVC
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.model_selection import GridSearchCV
+import string
+import pandas as pd
+import nltk
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.base import TransformerMixin
+from nltk.corpus import stopwords
+from sklearn.base import TransformerMixin
+from nltk.tokenize import sent_tokenize
+from nltk.tokenize import ToktokTokenizer
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet 
+from nltk import pos_tag
+
+# nltk.download('all')
+
+NGRAMS = (2,2) # BGrams only
+STOP_WORDS = stopwords.words('english')
+SYMBOLS = " ".join(string.punctuation).split(" ") + ["-", "...", "”", "”", "|", "#"]
+COMMON_WORDS = [] # to be populated later in our analysis
+toktok = ToktokTokenizer()
+wnl = WordNetLemmatizer()
 
 
 app = Flask(__name__)
 
+# These functions will be referred to by the unpickled object.
+def _get_wordnet_pos(word):
+    tag = pos_tag([word])[0][1][0].upper()
+    tag_dict = {"J": wordnet.ADJ,
+                "N": wordnet.NOUN,
+                "V": wordnet.VERB,
+                "R": wordnet.ADV}
+
+    return tag_dict.get(tag, wordnet.NOUN)
+
+# Creating our tokenizer function. Can also use a TFIDF
+def custom_tokenizer(sentence):
+    # Let's use some speed here.
+    tokens = [toktok.tokenize(sent) for sent in sent_tokenize(sentence)]
+    tokens = [wnl.lemmatize(word, _get_wordnet_pos(word)) for word in tokens[0]]
+    tokens = [word.lower().strip() for word in tokens]
+    tokens = [tok for tok in tokens if (tok not in STOP_WORDS and tok not in SYMBOLS and tok not in COMMON_WORDS)]
+
+    return tokens
+def clean_text(text):
+    if (type(text) == str):
+        text = text.strip().replace("\n", " ").replace("\r", " ")
+        text = text.lower()
+    else:
+        text = "NA"
+    return text
+class predictors(TransformerMixin):
+    def transform(self, X, **transform_params):
+        return [clean_text(text) for text in X]
+
+    def fit(self, X, y=None, **fit_params):
+        return self
+
+    def get_params(self, deep=True):
+        return {}
+    
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "*",
+    "Access-Control-Allow-Headers": "*",
+    "Access-Control-Max-Age": "3600",
+}
+
+MODELS_DIR = os.environ.get("MODELS_DIR")
+MODELS_DIR = (
+    MODELS_DIR if MODELS_DIR is not None else "./notebooks/models"
+)  # Default for cloudFunctions.
+ENCODER = load(open(f"{MODELS_DIR}/labelencoder.joblib", "rb"))
+MODEL = load(open(f"{MODELS_DIR}/model.joblib", "rb"))
 
 class MockRequest:
     def get_json(self):
@@ -36,16 +106,18 @@ class MockRequest:
         return test
 
 
-def predict_re(profile_dict):
+def predict_profile(profile_dict):
     try:
         prediction = MODEL.predict([profile_dict["descriptions"]])
         label = ENCODER.inverse_transform(prediction)
-
+        pp = MODEL.predict_proba([profile_dict["descriptions"]])
         return {
-            "label": label,
+            "label": label[0],
+            "proba": round(pp[0][prediction][0], 2)
         }
-    except:
-        return None
+    except Exception as e:
+       app.logger.error(f'We got this error: {e}')
+       return None
 
 
 @app.route("/")
@@ -80,7 +152,7 @@ def profile(request):
     titles = {
         "descriptions": prop["descriptions"] if "descriptions" in prop else -1,
     }
-    prediction = predict_re(titles)
+    prediction = predict_profile(titles)
     return (json.dumps(prediction), 200, CORS_HEADERS) if (prediction != None) else (
         json.dumps({"error": f"Unknown error in prediction!"}),
         503,
@@ -94,36 +166,6 @@ def mock_profile():
 
 
 if __name__ == "__main__":
-    def _get_wordnet_pos(word):
-        return None
-
-    def custom_tokenizer(sentence):
-        return None
-
-    class predictors(TransformerMixin):
-        def transform(self, X, **transform_params):
-            return None
-
-        def fit(self, X, y=None, **fit_params):
-            return None
-
-        def get_params(self, deep=True):
-            return None
-
-    CORS_HEADERS = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "*",
-        "Access-Control-Allow-Headers": "*",
-        "Access-Control-Max-Age": "3600",
-    }
-
-    MODELS_DIR = os.environ.get("MODELS_DIR")
-    MODELS_DIR = (
-        MODELS_DIR if MODELS_DIR is not None else "./notebooks/models"
-    )  # Default for cloudFunctions.
-    ENCODER = load(open(f"{MODELS_DIR}/labelencoder.joblib", "rb"))
-    MODEL = load(open(f"{MODELS_DIR}/model.joblib", "rb"))
-
-    logging.info("Running from the command line...")
+    app.logger.info("Running from the command line")
     app.run(host="0.0.0.0", port=800)
     mock_profile()
