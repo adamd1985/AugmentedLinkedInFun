@@ -45,6 +45,10 @@ COMMON_WORDS = [] # to be populated later in our analysis
 toktok = ToktokTokenizer()
 wnl = WordNetLemmatizer()
 
+from transformers import RobertaTokenizer, TFRobertaModel
+import tensorflow as tf
+
+
 
 app = Flask(__name__)
 
@@ -98,6 +102,13 @@ MODELS_DIR = (
 ENCODER = load(open(f"{MODELS_DIR}/labelencoder.joblib", "rb"))
 MODEL = load(open(f"{MODELS_DIR}/model.joblib", "rb"))
 
+ROB_TOK = RobertaTokenizer.from_pretrained('roberta-base')
+MASK_TOKEN = ROB_TOK.mask_token
+ROB_MODEL = TFRobertaModel.from_pretrained(f"{MODELS_DIR}/roberta-retrained", from_pt=True)
+
+from transformers import pipeline
+ROB_MODEL_CLF = pipeline("fill-mask", model=f"{MODELS_DIR}/roberta-retrained", tokenizer=ROB_TOK)
+
 class MockRequest:
     def get_json(self):
         test = {
@@ -105,6 +116,18 @@ class MockRequest:
         }
         return test
 
+
+def predict_chat(profile_dict):
+    try:
+        text = "10x Software engineer, java god, python expert, kubernetes. We have {}.".format(MASK_TOKEN)
+        encoded_input = ROB_TOK(text, return_tensors='tf')
+        messages = ROB_MODEL_CLF(text)
+        return {
+            "messages": messages
+        }
+    except Exception as e:
+       app.logger.error(f'We got this error: {e}')
+       return None
 
 def predict_profile(profile_dict):
     try:
@@ -118,7 +141,6 @@ def predict_profile(profile_dict):
     except Exception as e:
        app.logger.error(f'We got this error: {e}')
        return None
-
 
 @app.route("/")
 def heartbeat():
@@ -159,10 +181,48 @@ def profile(request):
         CORS_HEADERS,
     )
 
+@app.route("/messages", methods=["POST", "OPTIONS"])
+def messages(request):
+    prop = request.get_json()
+
+    if hasattr(request, "method") and request.method == "OPTIONS":
+        logging.error(f"CORS request!")
+        return ("", 200, CORS_HEADERS)
+    if MODEL is None:
+        raise RuntimeError("RE MODEL cannot be None!")
+    if (
+        hasattr(request, "headers")
+        and "content-type" in request.headers
+        and request.headers["content-type"] != "application/json"
+    ):
+        ct = request.headers["content-type"]
+        return (
+            json.dumps({"error": f"Unknown content type: {ct}!"}),
+            400,
+            CORS_HEADERS,
+        )
+
+    if prop is None:
+        return (json.dumps({"error": "No features passed!"}), 400, CORS_HEADERS)
+
+    profile = {
+        "profiles": prop["profiles"] if "profiles" in prop else -1,
+    }
+    prediction = predict_chat(profile)
+    return (json.dumps(prediction), 200, CORS_HEADERS) if (prediction != None) else (
+        json.dumps({"error": f"Unknown error in prediction!"}),
+        503,
+        CORS_HEADERS,
+    )
+
 
 @app.route("/mock_profile", methods=["GET", "POST", "OPTIONS"])
 def mock_profile():
     return profile(MockRequest())
+
+@app.route("/mock_messages", methods=["GET", "POST", "OPTIONS"])
+def mock_messages():
+    return predict_chat(MockRequest())
 
 
 if __name__ == "__main__":

@@ -162,3 +162,4 @@ cython_debug/
 **/cache
 *.h5
 notebooks/data/messagesForX.txt
+*.bin

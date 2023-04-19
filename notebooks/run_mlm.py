@@ -561,7 +561,8 @@ def main():
         )
 
         # no user-specified loss = will use the model internal loss
-        model.compile(optimizer=optimizer, jit_compile=training_args.xla, run_eagerly=True)
+        from tensorflow.keras.losses import MeanSquaredError
+        model.compile(optimizer=optimizer, jit_compile=training_args.xla, run_eagerly=True,  metrics="acc")
         # endregion
 
         # region Preparing push_to_hub and model card
@@ -621,6 +622,8 @@ def main():
         logger.info(f"  Final train loss: {train_loss:.3f}")
         logger.info(f"  Final train perplexity: {train_perplexity:.3f}")
 
+        model.save('./notebooks/output/model')
+
     """
     validation_loss = history.history["val_loss"][-1]
     try:
@@ -635,10 +638,11 @@ def main():
         results_dict = {}
         results_dict["train_loss"] = train_loss
         results_dict["train_perplexity"] = train_perplexity
+        model.save(training_args.output_dir)
         #results_dict["eval_loss"] = validation_loss
         #results_dict["eval_perplexity"] = validation_perplexity
-        with open(output_eval_file, "w") as writer:
-            writer.write(json.dumps(results_dict))
+        #with open(output_eval_file, "w") as writer:
+        #    writer.write(json.dumps(results_dict))
         # endregion
 
     if training_args.output_dir is not None and not training_args.push_to_hub:
