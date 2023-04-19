@@ -42,6 +42,26 @@ pipreqs --encoding utf-8
 
 It will generate a good requirements.txt. Then just import it.
 
+# Training the MLM for Message Recommendations
+
+```
+python ./notebooks/run_mlm.py \
+--model_name_or_path distilbert-base-cased \
+--output_dir ./notebooks/data/output \
+--train_file ./notebooks/data/messagesForX.txt
+--line_by_line
+```
+
+```
+python ./notebooks/run_mlm.py \
+--model_name_or_path roberta-base \
+--train_file ./notebooks/data/messagesForX.txt
+--per_device_train_batch_size 8 \
+--per_device_eval_batch_size 8 \
+--do_train \
+--do_eval \
+--output_dir ./notebooks/data/output
+```
 
 # Troubleshooting
 
