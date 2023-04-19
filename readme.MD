@@ -2,6 +2,8 @@
 
 Making the linkedin experience better by summarizing fluff and flagging profiles worthy of interest or an unfollow.
 
+ID: eebigbbojdlmbdpdnkmbdglgfegdejaj
+
 ## Build and Install
 
 The extension is made up of a NodeJS outer script and the actual chrome extension.
