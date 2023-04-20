@@ -10,26 +10,118 @@ class LinkedInCoPilot{
   constructor(localTest) {
 
     this.IS_TEST = localTest;
+    this.dlg = null;
   } 
    
 
   /**
-   * TODO: Augment the linkedin experience by adding info or visual cues.
+   * Augment the linkedin experience by adding info or visual cues.
+   * All will happen async as they  call our classification server.
    * @param {*} profiles 
    */
   augmentLinkedInExperience(profiles) {
-    for (let profile of profiles) {
-      $(`span:contains("${profile?.user}")`).each((index, element) => {
-        $(element).text('NPC');
-      })
-      $(`a:contains("${profile?.user}")`).each((index, element) => {
-        $(element).text('NPC');
-      })
-      $(`div:contains("${profile?.user}")`).each((index, element) => {
-        $(element).text('NPC');
-      })
-    }
+      let promises = [];
+      profiles.forEach(function(profile) {
+        if (!profile)
+          return
+
+        const data = {
+          'descriptions': (profile.posts?.join(' ') ?? ' ') + profile.titles,
+        };
+
+        promises.push(
+          fetch('http://127.0.0.1:800/profile', {
+            method: "POST", 
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data), 
+          })
+          .then(response=>response.json())
+          .then((data) => {
+            let search = `^${profile.user}$`;
+            let re = new RegExp(search, "g");
+            $(`h1.text-heading-xlarge:contains("${profile.user}")`).each((index, element) => {
+              let text = $(element).text().trim();
+              if (text.match(re)){
+                if (data['proba'] && data['proba'] >= 30){
+                  $(element).text(`${text} [Recruit Chance: (${data['proba']}%), Best Fit: ${data['label']}]`);
+                }
+                else{
+                  $(element).text(`${text} [No Fit]`);
+                }
+              }
+            })
+            $(`div:contains("${profile.user}")`).each((index, element) => {
+              let text = $(element).text().trim();
+              if (text.match(re)){
+                if (data['proba'] && data['proba'] >= 30){
+                  $(element).text(`${text} [Recruit Chance: (${data['proba']}%), Best Fit: ${data['label']}]`);
+                }
+                else{
+                  $(element).text(`${text} [No Fit]`);
+                }
+              }
+            })
+            $(`a:contains("${profile.user}")`).each((index, element) => {
+              let text = $(element).text().trim();
+              if (text.match(re)){
+                if (data['proba'] && data['proba'] >= 30){
+                  $(element).text(`${text} [Recruit Chance: (${data['proba']}%), Best Fit: ${data['label']}]`);
+                }
+                else{
+                  $(element).text(`${text} [No Fit]`);
+                }
+              }
+            })
+          }).catch ((error) => {
+              console.log('Error: ', error);
+          })
+        );
+    }); 
   }
+
+  /**
+   * Augment the linkedin experience by including how to message the person.
+   * @param {*} profiles 
+   */
+  augmentWithMessages(profiles) {
+    let promises = [];
+
+    if (!document?.URL.startsWith("https://www.linkedin.com/in/")) {
+        return;
+    }
+    const name = $(`h1.text-heading-xlarge`).text();
+    const dlg = this.dlg;
+    profiles.forEach(function(profile) {
+      if (!profile || name.toLowerCase() !== profile.user.toLowerCase()){
+        return
+      }
+      const data = {
+        'profiles': profile.titles,
+      };
+
+      
+      promises.push(
+        fetch('http://127.0.0.1:800/messages', {
+          method: "POST", 
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data), 
+        })
+        .then(response=>response.json())
+        .then((data) => {
+          $("#copilotmsg-content").text(data.messages ?? "Oops nothing was generated, contact your human copilot!")
+          dlg.showModal();
+        }).catch ((error) => {
+            console.log('Error: ', error);
+        })
+      );
+  }); 
+}
+
+  
 
   /**
    * scrape all profile links.
@@ -56,25 +148,14 @@ class LinkedInCoPilot{
    * @param {*} profiles 
    */
   async cacheFindings(profiles) {
-    console.log(JSON.stringify(profiles));
-    const csvString = [
-      [
-        "user",
-        "posts",
-        "titles"
-      ],
-      ...profiles.map(item => [
-        item?.user?.replace(/(\r\n|\n|\r|,)/gm, ";"),
-        item?.posts?.join(';').replace(/(\r\n|\n|\r|,)/gm, ";"), // Comma seperated files, cannot have commas.
-        item?.titles?.replace(/(\r\n|\n|\r|,)/gm, ";"),
-      ])
-    ]
-    .map(e => e.join(",")) 
-    .join("\n");
+    let profilesJson = JSON.stringify(profiles);
     
-    console.log(csvString);
-    chrome.storage.local.set({ profiles: csvString })
-      .catch(err => console.error(err));
+    await chrome.storage.local.set({ profiles: profilesJson }).catch(err => console.error(err));
+  }
+
+  async loadCache(){
+    let profilesJson = await chrome.storage.local.get(["profiles"]);
+    return profilesJson ? JSON.parse(profilesJson) : []
   }
 
   /**
@@ -82,7 +163,7 @@ class LinkedInCoPilot{
    * @param {*} links Absolute links to profiles. If link is not for a profile (we use xpath), it will be ignored.
    * @returns Porfile object.
    */
-  async getProfilesDetailsFromLinks(links) {
+  async getProfilesDetailsFromLinks(links, cachedProfiles) {
     function _scrape(profile){
       let lnName = $("main h1", profile).text()
       let profileObj = null;
@@ -111,6 +192,7 @@ class LinkedInCoPilot{
           user: lnName,
           posts: posts,
           titles: titles,
+          link: ''
         }
       }
       return profileObj;
@@ -118,15 +200,29 @@ class LinkedInCoPilot{
     
     let profiles = []
     let calls = []
-
+    let MAX_ITERS = 0
     for (const link of links) {
-      let profile;
+      let profile = null;
 
+      if (cachedProfiles && cachedProfiles.length > 0){
+        // If already scraped, we can skip it.
+        for(let cp in cachedProfiles){
+          if(cp.link == link){
+            profile = cp; 
+            break;
+          }
+        }
+        if (profile){
+          profiles.push(profile);
+          continue;
+        }
+      }
+      
       if (this.IS_TEST !== true) {
         // TODO: Avoid rate limit and allow dynamic content to load - can it be better?
         // Randomly wait for up to 2800ms.
-        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 2800)));
-            
+        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 3200)));
+        let _link = link;
         let response = await fetch(link);
         profile = await response.text();
         let call = chrome.runtime.sendMessage({ link: link }).then(response => {
@@ -134,10 +230,17 @@ class LinkedInCoPilot{
           let profileObj = null;
           if (profile) {
             profileObj = _scrape(profile);
+            if (profileObj){
+              profileObj.link = _link;
+            }
           }
           return Promise.resolve(profileObj);
         });
         calls.push(call)
+        if (MAX_ITERS >= 8){
+          break; // TODO: Just to make things faster.
+        }
+        MAX_ITERS += 1;
       }
       else {
         // Only in NodeJS env.
@@ -145,9 +248,10 @@ class LinkedInCoPilot{
         profile = await fs.readFile("linkedInSampleProfile.html", 'utf8')
         profiles.push(_scrape(profile));
       }
+      
     }
     if (this.IS_TEST !== true && calls.length>0) {
-      profiles = await Promise.all(calls);
+      profiles = profiles.concat(await Promise.all(calls));
     }
     return profiles;
   }
@@ -158,6 +262,24 @@ class LinkedInCoPilot{
    */
   async start() {
     console.log(`The HREF our linkedIn Extension is succesfully running on: ${document?.URL}`);
+    let profiles = this. loadCache();
+
+    const dlgHtml = "<dialog close id=\"copilotmsg\"><div > \
+                      <p> \
+                        <h2>Copilot Sourcing Suggestion</h2> \
+                        <p id=\"copilotmsg-content\"></p> \
+                      </p> \
+                      <form method=\"dialog\"> \
+                        <button>OK</button> \
+                      </form> \
+                      </div></dialog>"
+
+
+    if( document) {
+        $('body').prepend(dlgHtml); 
+
+        this.dlg = document.getElementById('copilotmsg');  
+    }
 
     // User is scrolling the site, get all profile links.
     let links = this.getAllLinks()
@@ -168,7 +290,7 @@ class LinkedInCoPilot{
     console.log(`We found these links: ${links}`)
     
     // Get profile information on which to classify the users.
-    let profiles = await this.getProfilesDetailsFromLinks(links)
+    profiles = await this.getProfilesDetailsFromLinks(links, profiles)
 
     console.log(`We scraped this number of profiles: ${profiles.length}`)
 
@@ -177,6 +299,7 @@ class LinkedInCoPilot{
 
     // Augment with classification.
     this.augmentLinkedInExperience(profiles);
+    this.augmentWithMessages(profiles);
   }
 }
 

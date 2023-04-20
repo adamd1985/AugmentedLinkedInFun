@@ -36,6 +36,10 @@ from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet 
 from nltk import pos_tag
 
+from flask_cors import CORS
+
+
+
 # nltk.download('all')
 
 NGRAMS = (2,2) # BGrams only
@@ -48,9 +52,8 @@ wnl = WordNetLemmatizer()
 from transformers import RobertaTokenizer, TFRobertaModel
 import tensorflow as tf
 
-
-
 app = Flask(__name__)
+CORS(app)
 
 # These functions will be referred to by the unpickled object.
 def _get_wordnet_pos(word):
@@ -105,25 +108,34 @@ MODEL = load(open(f"{MODELS_DIR}/model.joblib", "rb"))
 ROB_TOK = RobertaTokenizer.from_pretrained('roberta-base')
 MASK_TOKEN = ROB_TOK.mask_token
 ROB_MODEL = TFRobertaModel.from_pretrained(f"{MODELS_DIR}/roberta-retrained", from_pt=True)
-
+import random
 from transformers import pipeline
 ROB_MODEL_CLF = pipeline("fill-mask", model=f"{MODELS_DIR}/roberta-retrained", tokenizer=ROB_TOK)
 
-class MockRequest:
-    def get_json(self):
-        test = {
-            "descriptions": "IT recruitment Consultant at SNFHL I'm an IT/SAP/CRYPTO recruiter, who likes to learn new stuff and tries some basic coding with web3 and SQL in my free time. Crypto-bro for life!"
-        }
-        return test
 
-
-def predict_chat(profile_dict):
+def predict_chat():
     try:
-        text = "10x Software engineer, java god, python expert, kubernetes. We have {}.".format(MASK_TOKEN)
-        encoded_input = ROB_TOK(text, return_tensors='tf')
-        messages = ROB_MODEL_CLF(text)
+        chats = \
+            f"Let’s talk about your {MASK_TOKEN}! I am looking for new {MASK_TOKEN} for the fintech company Blackrock to further increase its {MASK_TOKEN}.\
+            Based on your {MASK_TOKEN}, I believe you, {MASK_TOKEN}, could be {MASK_TOKEN} in our {MASK_TOKEN}.\
+            Find the details here: https://careers.blackrock.com/job/16845601/ {MASK_TOKEN}\
+            If you're {MASK_TOKEN}, please let me know your {MASK_TOKEN} and your {MASK_TOKEN} for a {MASK_TOKEN}.\
+            What {MASK_TOKEN} Blackrock {MASK_TOKEN} {MASK_TOKEN}?: {MASK_TOKEN}\
+            {MASK_TOKEN}, {MASK_TOKEN}, and {MASK_TOKEN}."
+
+        answer = ROB_MODEL_CLF(chats)
+        new_chats = chats
+        toks = []
+        for ans in answer:
+            toks.append(random.choice(ans)['token_str'])
+        toks
+
+        for tok in toks:
+            new_chats = new_chats.replace(MASK_TOKEN, tok, 1)
+        new_chats
+        
         return {
-            "messages": messages
+            "messages": new_chats
         }
     except Exception as e:
        app.logger.error(f'We got this error: {e}')
@@ -134,9 +146,25 @@ def predict_profile(profile_dict):
         prediction = MODEL.predict([profile_dict["descriptions"]])
         label = ENCODER.inverse_transform(prediction)
         pp = MODEL.predict_proba([profile_dict["descriptions"]])
+
+        position = ''
+        if label[0] == "o":
+            position = "Engineering"
+        elif label[0] == "c":
+            position =  "CFA"
+        elif label[0] == "s":
+            position =  "HR"
+        elif label[0] == "f":
+            position =  "Product Management"
+        elif label[0] == "w":
+            position =  "Managing Director"
+        else:
+            position = "Analyst"
+
+        proba = round(pp[0][prediction][0]*100, 2)
         return {
-            "label": label[0],
-            "proba": round(pp[0][prediction][0], 2)
+            "label": position,
+            "proba": proba
         }
     except Exception as e:
        app.logger.error(f'We got this error: {e}')
@@ -147,13 +175,10 @@ def heartbeat():
     return ("1", 200, CORS_HEADERS)
 
 
-@app.route("/profile", methods=["POST", "OPTIONS"])
-def profile(request):
+@app.route("/profile", methods=["POST"])
+def profile():
     prop = request.get_json()
 
-    if hasattr(request, "method") and request.method == "OPTIONS":
-        logging.error(f"CORS request!")
-        return ("", 200, CORS_HEADERS)
     if MODEL is None:
         raise RuntimeError("RE MODEL cannot be None!")
     if (
@@ -181,13 +206,10 @@ def profile(request):
         CORS_HEADERS,
     )
 
-@app.route("/messages", methods=["POST", "OPTIONS"])
-def messages(request):
+@app.route("/messages", methods=["POST"])
+def messages():
     prop = request.get_json()
 
-    if hasattr(request, "method") and request.method == "OPTIONS":
-        logging.error(f"CORS request!")
-        return ("", 200, CORS_HEADERS)
     if MODEL is None:
         raise RuntimeError("RE MODEL cannot be None!")
     if (
@@ -208,7 +230,7 @@ def messages(request):
     profile = {
         "profiles": prop["profiles"] if "profiles" in prop else -1,
     }
-    prediction = predict_chat(profile)
+    prediction = predict_chat()
     return (json.dumps(prediction), 200, CORS_HEADERS) if (prediction != None) else (
         json.dumps({"error": f"Unknown error in prediction!"}),
         503,
@@ -218,11 +240,29 @@ def messages(request):
 
 @app.route("/mock_profile", methods=["GET", "POST", "OPTIONS"])
 def mock_profile():
-    return profile(MockRequest())
+    test = {
+            "descriptions": "IT recruitment Consultant at SNFHL I'm an IT/SAP/CRYPTO recruiter, who likes to learn new stuff and tries some basic coding with web3 and SQL in my free time. Crypto-bro for life!"
+        }
+    prediction = predict_profile(test)
+    return (json.dumps(prediction), 200) if (prediction != None) else (
+        json.dumps({"error": f"Unknown error in prediction!"}),
+        503,
+        CORS_HEADERS,
+    )
+
 
 @app.route("/mock_messages", methods=["GET", "POST", "OPTIONS"])
 def mock_messages():
-    return predict_chat(MockRequest())
+    test = {
+            "descriptions": "IT recruitment Consultant at SNFHL I'm an IT/SAP/CRYPTO recruiter, who likes to learn new stuff and tries some basic coding with web3 and SQL in my free time. Crypto-bro for life!"
+        }
+    prediction = predict_chat()
+    return (json.dumps(prediction), 200,) if (prediction != None) else (
+        json.dumps({"error": f"Unknown error in prediction!"}),
+        503,
+        CORS_HEADERS,
+    )
+
 
 
 if __name__ == "__main__":

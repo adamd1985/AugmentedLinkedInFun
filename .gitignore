@@ -163,3 +163,8 @@ cython_debug/
 *.h5
 notebooks/data/messagesForX.txt
 *.bin
+*.pb
+*.data-00000-of-00001
+notebooks/output/model/variables/variables.index
+*.1
+*.0

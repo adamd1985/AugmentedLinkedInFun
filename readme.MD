@@ -57,11 +57,12 @@ python ./notebooks/run_mlm.py \
 ```
 python ./notebooks/run_mlm.py \
 --model_name_or_path roberta-base \
---train_file ./notebooks/data/messagesForX.txt
+--train_file ./notebooks/data/messagesForX.txt \
 --per_device_train_batch_size 8 \
 --per_device_eval_batch_size 8 \
 --do_train \
 --do_eval \
+--line_by_line \
 --output_dir ./notebooks/data/output
 ```
 

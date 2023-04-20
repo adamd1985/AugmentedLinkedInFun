@@ -19,6 +19,9 @@
         "https://*/*",
         "http://*/*"
     ],
+    "action": {
+        "default_popup": "popup.html"
+    },
     "content_scripts": [
         {
             "matches": [
@@ -26,8 +29,10 @@
             ],
             "js": [
                 "scripts/jquery-3.6.4.slim.min.js",
+                "scripts/jquery-ui.min.js",
                 "scripts/utility.js",
-                "scripts/content.js"
+                "scripts/content.js",
+                "scripts/popup.js"
             ]
         }
     ],

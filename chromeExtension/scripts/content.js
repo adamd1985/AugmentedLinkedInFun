@@ -13,3 +13,7 @@ chrome.runtime.onMessage.addListener(
         }
     }
 );
+
+if (document?.URL.startsWith("https://www.linkedin.com/in/")) {
+    console.log(`Running from a profile page: ${document?.URL}`);
+}
