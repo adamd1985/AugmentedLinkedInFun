@@ -39,7 +39,7 @@ from nltk import pos_tag
 from flask_cors import CORS, cross_origin
 
 # incase wordnet isn't found.
-# nltk.download('all')
+nltk.download('all')
 
 NGRAMS = (2,2) # BGrams only
 STOP_WORDS = stopwords.words('english')
@@ -112,6 +112,8 @@ def predict_profile(profile_dict):
         pp = MODEL.predict_proba([profile_dict["descriptions"]])
 
         proba = round(pp[0][prediction][0]*100, 2)
+
+        print(f'{label[0]}:{proba}')
         return {
             "label": label[0],
             "proba": proba

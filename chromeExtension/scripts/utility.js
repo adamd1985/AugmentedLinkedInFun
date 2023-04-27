@@ -7,9 +7,7 @@ class LinkedInCoPilot{
    * Constructor
    * @param {*} localTest If this is true, then it's running from a test NodeJs. 
    */
-  constructor(localTest) {
-
-    this.IS_TEST = localTest;
+  constructor() {
     this.dlg = null;
   } 
    
@@ -20,8 +18,47 @@ class LinkedInCoPilot{
    * @param {*} profiles 
    */
   async augmentLinkedInExperience(profiles) {
+      async function _augmentText(element,profile,data){
+        if ($(element).data( "scanned" )){
+          return;
+        }
+
+        let search = `^${profile.user}$`;
+        let re = new RegExp(search, "g");
+
+        $(element).data( "scanned", true );
+        let text = $(element).text().trim();
+        if (text.match(re)){
+          if (data['proba'] && data['proba'] >= 0){
+            $(element).text(`${text} [${data['proba']}% as ${data['label']}]`);
+          }
+        }
+      }
+
+      async function _augmentImage(element,profile,data){
+        // TODO: Inefficient, will load all images for each profile.
+        // Use tokens to discern if this image is related to the profile.
+        let name = $(element).attr('alt')
+        if (!name){
+          return;
+        }
+        name = name.trim().toLocaleLowerCase();
+        if (!name.includes("photo") && !name.includes("profile") && !name.includes(profile.user.toLocaleLowerCase())){
+          return;
+        }
+        const tokens = profile.user.toLocaleLowerCase().split(" ");
+        for (const tok of tokens){
+          if (name.includes(tok)){
+            const imgUrl = await chrome.runtime.getURL(`assets/${data['label']}.png`)
+            $(element).attr('href', imgUrl);
+            $(element).attr('src', imgUrl);
+            break;
+          }
+        }
+      }
+
       let promises = [];
-      profiles.forEach(function(profile) {
+      profiles.forEach(function( profile) {
         if (!profile)
           return
 
@@ -39,62 +76,39 @@ class LinkedInCoPilot{
           })
           .then(response=>response.json())
           .then((data) => {
-            let search = `^${profile.user}$`;
-            let re = new RegExp(search, "g");
-            $(`h1.text-heading-xlarge:contains("${profile.user}")`).each((index, element) => {
-              let text = $(element).text().trim();
-              if (text.match(re)){
-                if (data['proba'] && data['proba'] >= 30){
-                  $(element).text(`${text} [Fit: (${data['proba']}%), as: ${data['label']}]`);
+            $(`div.visually-hidden`).each(async (index, element) => {
+              try{
+                const wrapper = $(element).parent().parent().parent(); 
+                if (!wrapper){
+                  return;
                 }
-                else{
-                  $(element).text(`${text} [No Fit]`);
-                }
+                wrapper.empty();
+
+                const url = await chrome.runtime.getURL(`assets/${data['label']}.png`)
+
+                const img = $(`<img src="${url}" alt="${profile.user}'s photo" id="ember23" class="EntityPhoto-circle-3 evi-image ember-view" href="${url}">`);
+                wrapper.append(img);
               }
+              catch (e){
+                console.error(e);
+              }
+            })
+            $(`img`).each(async (index, element) => {
+              _augmentImage(element,profile,data)
+            })
+            $(`h1.text-heading-xlarge:contains("${profile.user}")`).each((index, element) => {
+              _augmentText(element,profile,data);
             })
             $(`div:contains("${profile.user}")`).each((index, element) => {
-              let text = $(element).text().trim();
-              if (text.match(re)){
-                if (data['proba'] && data['proba'] >= 30){
-                  $(element).text(`${text} [Fit: (${data['proba']}%), as: ${data['label']}]`);
-                }
-                else{
-                  $(element).text(`${text} [No Fit]`);
-                }
-              }
+              _augmentText(element,profile,data);
+            })
+            $(`span:contains("${profile.user}")`).each((index, element) => {
+              _augmentText(element,profile,data);
             })
             $(`a:contains("${profile.user}")`).each((index, element) => {
-              let text = $(element).text().trim();
-              if (text.match(re)){
-                if (data['proba'] && data['proba'] >= 30){
-                  $(element).text(`${text} [Fit: (${data['proba']}%), as: ${data['label']}]`);
-                }
-                else{
-                  $(element).text(`${text} [No Fit]`);
-                }
-              }
+              _augmentText(element,profile,data);
             })            
-            $(`img`).each(async (index, element) => {
-              // TODO: Inefficient, will load all images for each profile.
-              // Use tokens to discern if this image is related to the profile.
-              let name = $(element).attr('alt')
-              if (!name){
-                return;
-              }
-              name = name.trim().toLocaleLowerCase();
-              if (!name.includes("photo") && !name.includes("profile")){
-                return;
-              }
-              const tokens = profile.user.toLocaleLowerCase().split(" ");
-              for (const tok of tokens){
-                if (name.includes(tok)){
-                  const imgUrl = await chrome.runtime.getURL(`assets/${data['label']}.png`)
-                  $(element).attr('href', imgUrl);
-                  $(element).attr('src', imgUrl);
-                  break;
-                }
-              }
-            })
+            
           }).catch ((error) => {
             console.log('Error: ', error);
           })
@@ -152,12 +166,22 @@ class LinkedInCoPilot{
     var links = [];
 
     $('a[href*="/in/"]').each((index, element) => {
+      if ($(element).data( "scanned" )){
+        return;
+      }
+      $(element).data( "scanned", true );
       let link = $(element).attr('href');
+      if (!link){
+        return;
+      }
+      link = link.toLowerCase().trim();
       if (/^(http|https).*/i.test(link) === false) {
         // Linkedin may use relative links, we need to convert to absolutes.
         link = `https://www.linkedin.com${link}`
       }
-      
+      if (links.includes(link)){
+        return;
+      }
       links.push(link);
     })
 
@@ -171,13 +195,13 @@ class LinkedInCoPilot{
   async cacheFindings(profiles) {
     let profilesJson = JSON.stringify(profiles);
     
-    await chrome.storage.local.set({ profiles: profilesJson }).catch(err => console.error(err));
+    await chrome.storage.sync.set({ 'profiles': profilesJson }).catch(err => console.error(err));
   }
 
   async loadCache(){
     let profilesJson = []; 
     try{
-      const rawProfilesJson = await chrome.storage.local.get(["profiles"]);
+      const rawProfilesJson = await chrome.storage.sync.set(["profiles"]);
       if (rawProfilesJson){
         profilesJson = JSON.parse(rawProfilesJson['profiles'])
       }
@@ -228,60 +252,59 @@ class LinkedInCoPilot{
       }
       return profileObj;
     }
-    
+
+    let cachedLinks = []
     let profiles = []
     let calls = []
-    let MAX_ITERS = 18
+    
+    let MAX_ITERS = 4
+
     for (const link of links) {
       let profile = null;
-
+      
       if (cachedProfiles && cachedProfiles.length > 0){
         // If already scraped, we can skip it.
-        for(let cp in cachedProfiles){
+        for(let cp of cachedProfiles){
           if(cp.link == link){
             profile = cp; 
+            cachedLinks.push(link)
             break;
           }
         }
+        
         if (profile){
           profiles.push(profile);
           continue;
         }
       }
-      
-      if (this.IS_TEST !== true) {
-        // TODO: Avoid rate limit and allow dynamic content to load - can it be better?
-        // Randomly wait for up to 2800ms.
-        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 3200)));
-        let _link = link;
-        let response = await fetch(link);
-        profile = await response.text();
-        let call = chrome.runtime.sendMessage({ link: link }).then(response => {
-          let profile = response?.profile;
-          let profileObj = null;
-          if (profile) {
-            profileObj = _scrape(profile);
-            if (profileObj){
-              profileObj.link = _link;
-            }
+
+      // Skip cached profiles.
+      links = links.filter(item => !cachedLinks.includes(item))
+
+      // TODO: Avoid rate limit and allow dynamic content to load - can it be better?
+      // Randomly wait for up to 2800ms.
+      await new Promise(r => setTimeout(r, Math.floor(Math.random() * 3200)));
+      let _link = link;
+      let response = await fetch(link);
+      profile = await response.text();
+      let call = chrome.runtime.sendMessage({ link: link }).then(response => {
+        let profile = response?.profile;
+        let profileObj = null;
+        if (profile) {
+          profileObj = _scrape(profile);
+          if (profileObj){
+            profileObj.link = _link;
           }
-          return Promise.resolve(profileObj);
-        });
-        calls.push(call)
-        if (MAX_ITERS <= 0){
-          break; // TODO: Just to make things faster.
         }
-        MAX_ITERS -= 1;
+        return Promise.resolve(profileObj);
+      });
+      calls.push(call)
+      if (MAX_ITERS <= 0){
+        break; // TODO: Just to make things faster.
       }
-      else {
-        // Only in NodeJS env.
-        const fs = require('fs').promises;
-        profile = await fs.readFile("linkedInSampleProfile.html", 'utf8')
-        profiles.push(_scrape(profile));
-      }
-      
+      MAX_ITERS -= 1;
     }
-    if (this.IS_TEST !== true && calls.length>0) {
+    if (calls.length>0) {
       profiles = profiles.concat(await Promise.all(calls));
     }
     return profiles;
@@ -293,7 +316,7 @@ class LinkedInCoPilot{
    */
   async start() {
     console.log(`The HREF our linkedIn Extension is succesfully running on: ${document?.URL}`);
-    let profiles = this. loadCache();
+    let profiles = this.loadCache();
 
     const dlgHtml = "<dialog close id=\"copilotmsg\"><div > \
                       <p> \
