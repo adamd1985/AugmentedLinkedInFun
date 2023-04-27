@@ -1,20 +1,26 @@
 # Make Linkedin Fun - with some NLP
 
-Using basic NLP constructs with sktlearn, we will be making our linkedin experience better by summarizing posts and replacing profiles with Seasame Street characters!
+Using NLP constructs with scikit-learn, we will be making our linkedin experience better by transforming a profile description on this social-network, into a Seasame Street character!
 
-# The Browsing Extension
+While we will go through all the relevant code in this article, it is best to load the repo and explore it in your favorite IDE.
 
-Our touch point will be a chrome extension.
+# Extend your Browser
 
-## Build our Extension and Scrape
+Our point of augmentation will be a chrome extension. 
 
-Either us ChatGPT to get the chrome extension boiler plate.
-The extension will be made up of:
+We want the extension to scrape any feed we see, pull in the information on the profiles found, send these to a classifier and map the output to a character
+
+## Building the Extension to Scrape and Show
+
+Either using ChatGPT to get the chrome extension boiler plate, or pull one from the developer quickstart google offers in it's site (see references).
+
+Whatever the method, the extension will be made up of:
 - manifest.json
 - background.js
 - content.js
 
 The manifest tells chrome what rights and functionalities the extension has, in our case:
+
 ```json
 {
     "manifest_version": 3,
@@ -52,19 +58,19 @@ The manifest tells chrome what rights and functionalities the extension has, in 
         "type": "module"
     },
 ```
+- **Permissions** tells the browser we will be injecting a script in the active tab, in this case contest.js.
+- **Host_permissions** signals where to run. 
+- **Content_script** is all the scripts and assets we will be using and where.
+- **background** defines what background script will be having access to the majority of chrome APIs. We also include the slim version of the jQuery library for it's element selection and manipulation functionality.
 
-**Permissions** tells the browser we will be injecting a script in the active tab, in this case contest.js.
-**Host_permissions** signals were to run. **Content_script** is the material we will be using and where.
-**background** defines what background script having access to the majority of chrome API is. We also include the 
-slim version of the jQuery library for it's element selection and manipulation functionality.
+## Injecting the script
 
-## The script
-
-Within the content script, we want to capture all links that direct us to a profile using the function below:
+Within the **content.js** script, we want to capture all links that direct us to a profile using the function below:
 
 ```js
 /**
  * scrape all profile links.
+ * @return array of links.
  */
 getAllLinks() {
     const re = new RegExp("^(http|https)://", "i");;
@@ -83,14 +89,22 @@ getAllLinks() {
     return links;
 }
 ```
+The function will an array of all links that lead to a profile. Such link is identified with the link regex: **^((http|https). * )?/in/.*.**. 
 
-A user's profile is identified with the link regex: **/in/.*.**. We will scrape every link in our feed. From here we call the function to pull in all profile content:
+We will scrape every link in our feed that matches that regex.
+
+We then call the function to pull in all profile content:
 
 ```js
 /**
    * Given a collection of profile links, we collect relevant information.
    * @param {*} links Absolute links to profiles. If link is not for a profile (we use xpath), it will be ignored.
-   * @returns Porfile object.
+   * @returns Array of Profile objects, made up of
+   *            {
+   *                user
+   *                titles
+   *                link
+   *            }
    */
   async getProfilesDetailsFromLinks(links, cachedProfiles) {
 
@@ -125,8 +139,6 @@ A user's profile is identified with the link regex: **/in/.*.**. We will scrape 
     let MAX_ITERS = 5
     for (const link of links) {
         let profile = null;
-
-
         // Avoid rate limit and allow dynamic content to load
         // Randomly wait for up to 2sec.
         await new Promise(r => setTimeout(r, Math.floor(Math.random() * 2000)));
@@ -157,20 +169,30 @@ A user's profile is identified with the link regex: **/in/.*.**. We will scrape 
   }
 ```
 
-In the main function body, we will use jquery to scrape relevant profile info. `$("main h1", profile)` to capture the user's nam, while `$("main div.text-body-medium", profile)` 
-to capture the user's title. Though screping a profile from a link is not straight forward, `chrome.runtime.sendMessage` is what allows us to do this by sending a message to a global script.
+In the main function body, we will use jQuery to scrape relevant profile info. 
 
-## Know your Background
+The selector `$("main h1", profile)` will be used to capture the user's name, while `$("main div.text-body-medium", profile)` will be used to capture the user's title. 
 
-LinkedIn generates dynamic content on the fly, which means when the page loads - not all info is available. So we will open the profile in a new tab, pull in the content, and close the tab. This is done in the global **background.js** script:
+Note that scraping a profile from a link is not that straight forward, as linkedIn generates dynamic content, and we will lose scope if we browser away. 
+
+Therefore we need to call `chrome.runtime.sendMessage` to send a command, which will be received by our global **background.js** script (that has the most API access), and it will open a new tab to pull in all of the profile's dynamic content.
+
+## A Background script to Orchestrate Profiles
+
+As we already revealed, LinkedIn generates dynamic content on the fly, which means when the page loads - not all info is available. 
+
+So we will open the profile in a new tab, pull in the content, and close the tab while sending back the HTML content to the caller. 
+
+This is done in the global **background.js** script:
 
 ```js
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     console.log(`Message from ${sender}: ${JSON.stringify(message)}`)
     if (message?.link) {
         chrome.tabs
-            .create({ url: message.link, active: false })
+            .create({ url: message.link, active: false }) // Create a inactive TAB
             .then(tab => {
+                // Inject a script to pull in all DOM
                 let tabID = tab.id
                 chrome.scripting.executeScript({
                     func: getProfile,
@@ -180,11 +202,11 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     injectImmediately: false
                 })
                 .then(injectionResults => {
-                    // Should have 1 parent frame.
+                    // Send the DOM back to the calling content.js
                     let profile = injectionResults[0]?.result;
                     return sendResponse({ profile: profile});
                 })
-                .then(() => chrome.tabs.remove(tabID))
+                .then(() => chrome.tabs.remove(tabID)) // Remove the tab
                 .catch(error => console.error(error.message))
             })
     } 
@@ -193,12 +215,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 });
 ```
 
-`chrome.runtime.onMessage.addListener` lives in the **background.js** and will pick the message sent from our **content.js** and proceed to open a tab and inject the script below using `chrome.scripting.executeScript`:
+The `chrome.runtime.onMessage.addListener` will register a function which will pick the message sent from our **content.js**. 
+
+It will proceed to open a tab, and inject the script below using `chrome.scripting.executeScript`:
 
 ```js
 async function getProfile() {
-    // Activities are loaded by a dynamic script and might not be available
-    // when the script is loaded. We try to assert it, but cannot do anything.
+    // Open a profile, and wait for all content to be loaded.
     const el = document.querySelector(".pvs-list");
     if (el) {
         console.log("Has activity!")
@@ -212,11 +235,19 @@ async function getProfile() {
 }
 ```
 
-Get profile will open a tab, get the HTML and close it. Note the various timeouts, it's to allow the dynamic content to load and prevent LinkedIn from banning us for abusing their site through too much scraping. With the profile HTML in our hands, we will return it to the content.js script.
+Note the timeout, there will be a lot of these in this extension. 
 
-## What's in a Character
+The timeout waits for the page to load with the data we need, as this dynamic content in particular has no callback function that can signal us that the whole content was loaded.
 
-We have the profiles, now let's indentify them with a Seasame Street characters using the function below:
+Once all HTML is available, we get the DOM and close the tab. 
+
+**An important note on timeouts and scraping**: It plays nice with LinkedIn, because if it detects abusive automation, it will ban us. If you want to automate, apply to a **LinkedIn Developer Account**.
+
+With the profile's HTML in our hands, we will return it to the **content.js** script from the previous section.
+
+## What's the Character
+
+We have the profiles' data scraped into a structure, now let's associate them to a Seasame Street character, using the function below:
 
 ```js
 /**
@@ -234,52 +265,61 @@ augmentLinkedInExperience(profiles) {
         'descriptions': profile.titles,
     };
 
+    // Call the trained classifier
     promises.push(
         fetch('http://127.0.0.1:800/profile', {
-        method: "POST", 
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data), 
+            method: "POST", 
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data), 
         })
         .then(response=>response.json())
         .then((data) => {
-        let search = `^${profile.user}$`;
-        let re = new RegExp(search, "g");
-        $(`h1.text-heading-xlarge:contains("${profile.user}")`).each((index, element) => {
-            let text = $(element).text().trim();
-            if (text.match(re)){
-            if (data['proba'] && data['proba'] >= 30){
-                $(element).text(`${data['label']}`);
-            }
-            }
-        })
-        $(`div:contains("${profile.user}")`).each((index, element) => {
-            let text = $(element).text().trim();
-            if (text.match(re)){
-            if (data['proba'] && data['proba'] >= 30){
-                $(element).text(`${data['label']}`);
-            }
-            }
-        })
+            let search = `^${profile.user}$`;
+            let re = new RegExp(search, "g");
+            // Find the name and replace it
+            $(`h1.text-heading-xlarge:contains("${profile.user}")`).each((index, element) => {
+                let text = $(element).text().trim();
+                if (text.match(re)){
+                if (data['proba'] && data['proba'] >= 30){
+                    $(element).text(`${data['label']}`);
+                }
+                }
+            })
+            // Find other instances of the name in links and articles, and replace it
+            $(`div:contains("${profile.user}")`).each((index, element) => {
+                let text = $(element).text().trim();
+                if (text.match(re)){
+                    if (data['proba'] && data['proba'] >= 30){
+                        $(element).text(`${data['label']}`);
+                    }
+                }
+            })
         }).catch ((error) => {
             console.log('Error: ', error);
         })
     );
 }); 
 ```
-Note the `fetch('http://127.0.0.1:800/profile'`, this will call an API to a model we will train later. For the rest, we capture elements that link to the users using `$('h1.text-heading-xlarge:contains("${profile.user}")'')` or ` $('div:contains("${profile.user}")')`, and change their content to reflect the character we want.
 
-# Modelling Characters
+We call our flask server, hosting the trained model, with `fetch('http://127.0.0.1:800/profile'`.
 
-We have asked chatGPT to create mock LinkedIn profile of specific denominations: HR, crypto entusiasts, business gurus and standard engineers. 
+Once the profile has been classified, we capture elements that link to the users using the selector `$('h1.text-heading-xlarge:contains("${profile.user}")'')` or ` $('div:contains("${profile.user}")')`, and change their content to reflect the character we want.
 
-Example csv generated by openAI are:
+# Training our Model - A Sesame Street Lesson
 
-`Lawrence Dickerson, IT professional with skills in microsoft excel microsoft word microsoft outlook microsoft powerpoint IT business partner and so on, grover`
+We have asked chatGPT to create synthetic LinkedIn profiles of specific professions: HR, crypto entusiasts, business and financial gurus and software engineers. 
 
-Lawrence, a generated name, was listed a hard working grover. We build a similar classification for various profiles.
-Then we load it, and clean up missing rowS:
+Example of the CSVs generated by openAI are:
+
+- `Lawrence Dickerson, IT professional with skills in microsoft excel microsoft word microsoft outlook microsoft powerpoint IT business partner and so on` - Labelled as the hard working `Grover`.
+- `Ana Tolley,web3 visionary,successful cryptocurrency trader with a track record of identifying profitable investments excels at technical analysis and risk management` - Labelled as the trash loving Oscar the Grouch
+- `Mathew Bird,money mastermind,unlock the power of your finances and take control of your wealth with the guidance of the money mastermind` - Labelled as the great Big Bird.
+- `Oleta Reece,the wealth creation newsletter,people manager hr recruitment manager business coach trainer` - Labelled as the hustling Count.
+- `Gary Otis,responsible for handling the entire recruiting cycle, such as sourcing screening contacting, scheduling interview releasing offer letter and placing the qualified resource sourcing` - Labelled as the zany (and Achillean?) duo Ernie and Bert.
+
+Let's load all the labeld data, and clean it:
 
 ```py
 DATA = "./data/anonLinkedInProfiles.csv"
@@ -299,8 +339,9 @@ print(f'Resampled Shape: {data.shape}')
 
 data.head()
 ```
+![Samples](head.PNG)
 
-We build a tokenizer:
+We then build a tokenizer that removes stop words, whitespace, symbols, and reduces the words to their lemmas:
 
 ```py
 import string
@@ -363,13 +404,11 @@ def clean_text(text):
         text = "NA"
     return text
 
-
-# With the BoW, the model does a bit better.
 bow_vector = CountVectorizer(
     tokenizer=custom_tokenizer, ngram_range=NGRAMS)
 ```
 
-split training and test data:
+WE do the standard training and test data split:
 
 ```py
 from sklearn.model_selection import train_test_split
@@ -389,8 +428,9 @@ test_ratio = 0.10
 X_train, X_test, y_train, y_test = train_test_split(X, ylabels, test_size=1 - train_ratio)
 X_val, X_test, y_val, y_test = train_test_split(X_test, y_test, test_size=test_ratio/(test_ratio + validation_ratio))
 ```
+And we should be ready to go.
 
-We check the ngrams that make up our selected profiles:
+But before, let's do some analysis to get a sense of what descriptions our model will be injesting, being the ngrams that make up our selected profiles:
 
 ```py
 import seaborn as sns
@@ -460,8 +500,9 @@ for idx, label in tqdm(enumerate(labels), "Plot labels"):
 
 plt.show()
 ```
+![NGRAM Frequencies](./ngramFreq.PNG)
 
-Check what the ngrams and filter out common and uncommon words:
+From the chart above, we can see some common ngrams for each label. We should filter out the most overused and rarest ones:
 
 ```py
 print(common_bigrams_label_dict['top_corpus_freq'])
@@ -479,12 +520,13 @@ sns.countplot(x=y_train)
 plt.show
 ```
 
-In our count plot chart, we see that our training data is unbalanced, so let's downsample:
+![NGRAM count plots](./plot.PNG)
+
+In our count plot chart, we notice that our training data is unbalanced, so let's **downsample** to the smallest frequency:
 
 ```py
-# Either class weights
+# Either use class weights
 from sklearn.utils.class_weight import compute_class_weight
-
 
 keys = np.unique(y_train)
 values = compute_class_weight(class_weight='balanced', classes=keys, y=y_train)
@@ -508,7 +550,7 @@ data_under = pd.concat([data0,data1,data2,data3,data4],axis=0)
 print(f'Undersampled shapes: {data0.shape}, {data1.shape}, {data2.shape}, {data3.shape}, {data4.shape}')
 ```
 
-Train the model:
+Finally, we train the model:
 
 ```py
 from sklearn import metrics
@@ -554,7 +596,7 @@ predicted = model.predict(X_test)
 
 Previously we used crossvalidators and an ensemble to find the best classifiers and hyperparameters, the code above is the result of that.
 
-Check our model's accuracy:
+Let's check our model's accuracy:
 
 ```py
 # Model Accuracy
@@ -572,8 +614,13 @@ disp = metrics.ConfusionMatrixDisplay(confusion_matrix=cm,
 
 disp.plot()
 ```
+![Scores](./confusion.PNG)
 
-Save and have it run in a server:
+Above 90% is more than perfect for us, the count will be proud!
+
+![Scores](./bestCount.PNG)
+
+Save our model for the Flask server:
 
 ```py
 from joblib import dump, load
@@ -587,7 +634,7 @@ validate_pickled_le = load('./models/labelencoder.joblib')
 pickled_model = dump(model, './models/model.joblib')
 validate_pickled_model = load('./models/model.joblib')
 
-xx_test = ["IT recruitment Consultant at SNFHL I'm an IT/SAP recruiter, who likes to learn new stuff and tries some basic coding with SQL in my free time."]
+xx_test = ["IT Consultant at Sesame Street, lord of Java Code, who likes to learn new stuff and tries some machine learning in my free engineering time."]
 
 yy_result = validate_pickled_model.predict(xx_test)
 yy_result_label = validate_pickled_le.inverse_transform(yy_result)
@@ -598,9 +645,13 @@ print(f'Predicted: {yy_result_label} at confidece {yy_result_proba[0][yy_result]
     and their probability: {yy_result_proba}')
 ```
 
-# Serving Models
+![Saved model](./savedModel.PNG)
 
-We will use a flask server to host the model and serve it as an API. First we important all relevant interfaces and the pickled model:
+# Serving Models with some Flask
+
+We will use a flask server to host the model and serve it through a REST API.
+
+First we import or recreate all relevant interfaces for the pickled model (note that is the same code as the one used in our notebook):
 
 ```py
 NGRAMS = (2,2) # BGrams only
@@ -609,9 +660,6 @@ SYMBOLS = " ".join(string.punctuation).split(" ") + ["-", "...", "”", "”", "
 COMMON_WORDS = [] # to be populated later in our analysis
 toktok = ToktokTokenizer()
 wnl = WordNetLemmatizer()
-
-from transformers import RobertaTokenizer, TFRobertaModel
-import tensorflow as tf
 
 app = Flask(__name__)
 CORS(app)
@@ -642,6 +690,7 @@ def clean_text(text):
     else:
         text = "NA"
     return text
+
 class predictors(TransformerMixin):
     def transform(self, X, **transform_params):
         return [clean_text(text) for text in X]
@@ -660,7 +709,7 @@ CORS_HEADERS = {
 }
 ```
 
-Prepare our prediction API:
+Then prepare our prediction API:
 
 ```py
 def predict_profile(profile_dict):
@@ -694,7 +743,7 @@ def predict_profile(profile_dict):
 
 ```
 
-and server it on a REST endpoint:
+and serve it on a REST endpoint:
 
 ```py
 @app.route("/profile", methods=["POST"])
@@ -743,12 +792,16 @@ if __name__ == "__main__":
 
 We are almost there!
 
-To run the extension, go to your chrome browser and type `chrome://extensions`. From here click on **Load Unpacked** and select the folder **chromeExtension**.
+To run the extension, go to your chrome browser and type `chrome://extensions`. From here click on **Load Unpacked** and select the folder **chromeExtension**:
+
+![Scores](./postman.PNG)
+
 Go to your linkedIn, open browser tools console, and see the extension traverser your feed and pickup information.
 
-It will replace the names of people in your network with their classifier as Sesame Street characters, showing that an extension can create an augmented experience.
+It will replace the names of people in your network with their classifier as Sesame Street characters, showing that an extension can create an augmented experience:
 
 
+Such fun!
 
 # Conclusion
 
@@ -760,6 +813,9 @@ The extension scrapes linked in, but up to a maximum of 5 profiles. Linkedin wil
 
 - https://scikit-learn.org/stable/
 - https://developer.chrome.com/docs/extensions/
+- https://developer.linkedin.com/
+- https://flask.palletsprojects.com/en/2.3.x/
+- https://www.postman.com/
 
 ## Github
 

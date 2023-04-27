@@ -19,7 +19,7 @@ class LinkedInCoPilot{
    * All will happen async as they  call our classification server.
    * @param {*} profiles 
    */
-  augmentLinkedInExperience(profiles) {
+  async augmentLinkedInExperience(profiles) {
       let promises = [];
       profiles.forEach(function(profile) {
         if (!profile)
@@ -74,8 +74,29 @@ class LinkedInCoPilot{
                 }
               }
             })
+
+            
+            $(`img`).each(async (index, element) => {
+              // TODO: Inefficient, will load all images for each profile.
+              // Use tokens to discern if this image is related to the profile.
+              const tokens = profile.user.toLocaleLowerCase().split(" ");
+              let name = $(element).attr('alt')
+              if (!name){
+                return;
+              }
+              name = name.trim().toLocaleLowerCase();
+              name = name.replace("'s",""); // LI uses possessive determiners for profile images.
+              for (const tok of tokens){
+                if (name.includes(tok)){
+                  const imgUrl = await chrome.runtime.getURL(`assets/${data['label']}.png`)
+                  $(element).attr('href', imgUrl);
+                  $(element).attr('src', imgUrl);
+                  break;
+                }
+              }
+            })
           }).catch ((error) => {
-              console.log('Error: ', error);
+            console.log('Error: ', error);
           })
         );
     }); 
@@ -154,8 +175,18 @@ class LinkedInCoPilot{
   }
 
   async loadCache(){
-    let profilesJson = await chrome.storage.local.get(["profiles"]);
-    return profilesJson ? JSON.parse(profilesJson) : []
+    let profilesJson = []; 
+    try{
+      const rawProfilesJson = await chrome.storage.local.get(["profiles"]);
+      if (rawProfilesJson){
+        profilesJson = JSON.parse(rawProfilesJson['profiles'])
+      }
+    }
+    catch (e){
+      console.log(`Error pulling Cached objects: ${e}`);
+    }
+    
+    return profilesJson;
   }
 
   /**
@@ -200,7 +231,7 @@ class LinkedInCoPilot{
     
     let profiles = []
     let calls = []
-    let MAX_ITERS = 0
+    let MAX_ITERS = 10
     for (const link of links) {
       let profile = null;
 
@@ -237,10 +268,10 @@ class LinkedInCoPilot{
           return Promise.resolve(profileObj);
         });
         calls.push(call)
-        if (MAX_ITERS >= 8){
+        if (MAX_ITERS <= 0){
           break; // TODO: Just to make things faster.
         }
-        MAX_ITERS += 1;
+        MAX_ITERS -= 1;
       }
       else {
         // Only in NodeJS env.
