@@ -45,7 +45,7 @@ class LinkedInCoPilot{
               let text = $(element).text().trim();
               if (text.match(re)){
                 if (data['proba'] && data['proba'] >= 30){
-                  $(element).text(`${text} [Recruit Chance: (${data['proba']}%), Best Fit: ${data['label']}]`);
+                  $(element).text(`${text} [Fit: (${data['proba']}%), as: ${data['label']}]`);
                 }
                 else{
                   $(element).text(`${text} [No Fit]`);
@@ -56,7 +56,7 @@ class LinkedInCoPilot{
               let text = $(element).text().trim();
               if (text.match(re)){
                 if (data['proba'] && data['proba'] >= 30){
-                  $(element).text(`${text} [Recruit Chance: (${data['proba']}%), Best Fit: ${data['label']}]`);
+                  $(element).text(`${text} [Fit: (${data['proba']}%), as: ${data['label']}]`);
                 }
                 else{
                   $(element).text(`${text} [No Fit]`);
@@ -67,25 +67,25 @@ class LinkedInCoPilot{
               let text = $(element).text().trim();
               if (text.match(re)){
                 if (data['proba'] && data['proba'] >= 30){
-                  $(element).text(`${text} [Recruit Chance: (${data['proba']}%), Best Fit: ${data['label']}]`);
+                  $(element).text(`${text} [Fit: (${data['proba']}%), as: ${data['label']}]`);
                 }
                 else{
                   $(element).text(`${text} [No Fit]`);
                 }
               }
-            })
-
-            
+            })            
             $(`img`).each(async (index, element) => {
               // TODO: Inefficient, will load all images for each profile.
               // Use tokens to discern if this image is related to the profile.
-              const tokens = profile.user.toLocaleLowerCase().split(" ");
               let name = $(element).attr('alt')
               if (!name){
                 return;
               }
               name = name.trim().toLocaleLowerCase();
-              name = name.replace("'s",""); // LI uses possessive determiners for profile images.
+              if (!name.includes("photo") && !name.includes("profile")){
+                return;
+              }
+              const tokens = profile.user.toLocaleLowerCase().split(" ");
               for (const tok of tokens){
                 if (name.includes(tok)){
                   const imgUrl = await chrome.runtime.getURL(`assets/${data['label']}.png`)
