@@ -231,7 +231,7 @@ class LinkedInCoPilot{
     
     let profiles = []
     let calls = []
-    let MAX_ITERS = 10
+    let MAX_ITERS = 18
     for (const link of links) {
       let profile = null;
 
