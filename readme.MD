@@ -261,56 +261,108 @@ We have the profiles' data scraped into a structure, now let's associate them to
 
 ```js
 /**
- * Augment the linkedin experience by adding info or visual cues.
- * All will happen async as they  call our classification server.
- * @param {*} profiles 
- */
-augmentLinkedInExperience(profiles) {
-    let promises = [];
-    profiles.forEach(function(profile) {
-    if (!profile)
-        return
+   * Augment the linkedin experience by adding info or visual cues.
+   * All will happen async as they  call our classification server.
+   * @param {*} profiles 
+   */
+  async augmentLinkedInExperience(profiles) {
+      async function _augmentText(element,profile,data){
+        if ($(element).data( "scanned" )){
+          return;
+        }
 
-    const data = {
-        'descriptions': profile.titles,
-    };
+        let search = `^${profile.user}$`;
+        let re = new RegExp(search, "g");
 
-    // Call the trained classifier
-    promises.push(
-        fetch('http://127.0.0.1:800/profile', {
+        $(element).data( "scanned", true );
+        let text = $(element).text().trim();
+        if (text.match(re)){
+          if (data['proba'] && data['proba'] >= 0){
+            $(element).text(`${text} [${data['proba']}% as ${data['label']}]`);
+          }
+        }
+      }
+
+      async function _augmentImage(element,profile,data){
+        // TODO: Inefficient, will load all images for each profile.
+        // Use tokens to discern if this image is related to the profile.
+        let name = $(element).attr('alt')
+        if (!name){
+          return;
+        }
+        name = name.trim().toLocaleLowerCase();
+        if (!name.includes("photo") && !name.includes("profile") && !name.includes(profile.user.toLocaleLowerCase())){
+          return;
+        }
+        const tokens = profile.user.toLocaleLowerCase().split(" ");
+        for (const tok of tokens){
+          if (name.includes(tok)){
+            const imgUrl = await chrome.runtime.getURL(`assets/${data['label']}.png`)
+            $(element).attr('href', imgUrl);
+            $(element).attr('src', imgUrl);
+            break;
+          }
+        }
+      }
+
+      let promises = [];
+      profiles.forEach(function( profile) {
+        if (!profile)
+          return
+
+        const data = {
+          'descriptions': (profile.posts?.join(' ') ?? ' ') + profile.titles,
+        };
+
+        promises.push(
+          fetch('http://127.0.0.1:800/profile', {
             method: "POST", 
             headers: {
-                "Content-Type": "application/json",
+              "Content-Type": "application/json",
             },
             body: JSON.stringify(data), 
-        })
-        .then(response=>response.json())
-        .then((data) => {
-            let search = `^${profile.user}$`;
-            let re = new RegExp(search, "g");
-            // Find the name and replace it
+          })
+          .then(response=>response.json())
+          .then((data) => {
+            $(`div.visually-hidden`).each(async (index, element) => {
+              try{
+                const wrapper = $(element).parent().parent().parent(); 
+                if (!wrapper){
+                  return;
+                }
+                wrapper.empty();
+
+                const url = await chrome.runtime.getURL(`assets/${data['label']}.png`)
+
+                const img = $(`<img src="${url}" alt="${profile.user}'s photo" id="ember23" class="EntityPhoto-circle-3 evi-image ember-view" href="${url}">`);
+                wrapper.append(img);
+              }
+              catch (e){
+                console.error(e);
+              }
+            })
+            $(`img`).each(async (index, element) => {
+              _augmentImage(element,profile,data)
+            })
             $(`h1.text-heading-xlarge:contains("${profile.user}")`).each((index, element) => {
-                let text = $(element).text().trim();
-                if (text.match(re)){
-                if (data['proba'] && data['proba'] >= 30){
-                    $(element).text(`${data['label']}`);
-                }
-                }
+              _augmentText(element,profile,data);
             })
-            // Find other instances of the name in links and articles, and replace it
             $(`div:contains("${profile.user}")`).each((index, element) => {
-                let text = $(element).text().trim();
-                if (text.match(re)){
-                    if (data['proba'] && data['proba'] >= 30){
-                        $(element).text(`${data['label']}`);
-                    }
-                }
+              _augmentText(element,profile,data);
             })
-        }).catch ((error) => {
+            $(`span:contains("${profile.user}")`).each((index, element) => {
+              _augmentText(element,profile,data);
+            })
+            $(`a:contains("${profile.user}")`).each((index, element) => {
+              _augmentText(element,profile,data);
+            })            
+            
+          }).catch ((error) => {
             console.log('Error: ', error);
-        })
-    );
-}); 
+          })
+        );
+    }); 
+  }
 ```
 
 We call our flask server, hosting the trained model, with `fetch('http://127.0.0.1:800/profile'`.
@@ -819,12 +871,13 @@ The extension scrapes linked in, but up to a maximum of 5 profiles. Linkedin wil
 - https://developer.linkedin.com/
 - https://flask.palletsprojects.com/en/2.3.x/
 - https://www.postman.com/
+- https://www.kaggle.com/
 
 ## Github
 
 Article here is also available on [Github](https://github.com/adamd1985/AugmentedLinkedInFun)
 
-Kaggle notebook available [here](https://github.com/adamd1985/AugmentedLinkedInFun)
+Kaggle notebook available [here](https://www.kaggle.com/code/addarm/linkedin-profiles-as-sesame-street-characters)
 
 
 ## Media
