@@ -43,7 +43,7 @@ class ProfileClassifier {
         this.useModel = await use.load();
 
         console.log(`Loading custom model...`)
-        this.model = await tf.loadLayersModel(this.savedClassifier);
+        this.model = await tf.loadGraphModel(this.savedClassifier);
 
         tf.tidy(async () => {
             // Warms up the models by causing intermediate tensor values to be built.
