@@ -169,7 +169,8 @@ notebooks/output/model/variables/variables.index
 *.1
 *.0
 
-node_modules
+**/node_modules
+**/node_modules/*
 dist*
 .cache
 yarn-error.log

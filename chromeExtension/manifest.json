@@ -1,9 +1,9 @@
 {
     "manifest_version": 3,
     "key": "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCaoUqzr28sZcJ6gcfXLlfBLdhDWNSKUk/VpAe3XOsLeNnr+QawRUcjpdCl5eUk4Wgq/SnuLF9QLdSgE5ws1f+6eupUHYthufOXUB1+rkPSQG8mLAx+qSWYcctJO3w1JF3278ursi11ViXeRzy7wV5Q2B6uxAdSdQS8uXtrTmlNayo8SHmLEWBQcR202G83mLebx7UsYg89XrWjHYBUPgpuMi68cD4f5xu+VTodWYL5FikBfzM87LxUecdzyvX0QFmT3BQ9M38rq9Ca/R/dDJ7iQ2sk3yCy0oEl81qPWHA1Pm23Gyit3Sd5Ty8FXnBfLHcHyCzZ3dHU3yZLB6tlbVCFAgMBAAECggEACzDXHi/5JMZsj78qvlj9Qt7VgvI/147jdju7zzprTFY/t0M7h7BL2LmcYxVDQysJBetyiGkvsLbQZ5FjwR7vtghFQzcsKjNx/KZwrAVipSnCoYmYkeYd8W1y3+btM09heYibPd7USWSlsvOG4rO45rLtbYqEWSRc5meqFfcDyfV1ryQnJl9Ua7bmeTDHQGpLw8vLzullis8OgIo/Us2gZX6FaafOyJfsZBP4uQjPLKayJccBA44UO6hVPxFVGSZYp4io8wY5Yn2Vdyqh9nx5qiT4fkUSay2P4BJLmiOHReiLFRxfeKSRRuOFKfOdNigMxrsXIU5uXRD2miS00vN0YQKBgQDR3HKUeYwoNT3DrXfDokQAFBa8q7z6N+PIi3de4OtTpjYHqXxxOz9mb4Zy4EtO9JSLRDiAxx6V1BPgdy20fKwNg03W35mbInxUfNbUOBeVFaJ8KEQLQStwlqHLf334v2yGApSUacQUvF+AruubG8UOExkTK4Wx7Rxm7VVftD6n7QKBgQC8oEojwhksf9hlFrFWgmkONTA1nf7svtl46FO4JNjiHbNYqrdTUkrtYxUeFTGZWz/+iy4KyTDF2QwYIr4rzCILTVBOHVzFEe5XGtoTqqehiqNGJGiG1JanVGxm0+GD2cpLk4XYmLo+pgIVWWAKjFzxToEfKj0nwjsgyKgmd+aH+QKBgHsyh80jwaTFBJo/1mPxeSv2nxZpV0oozz6mqQ/4yA1WMLe0xooOdvyikfIUPAGA0UckaGso+YqJcpW+QQWIftR79ZEjuJ/60bQjiVYSC74Icleip7dXrbGtrBOzp3cEoSfWkfTCVkq5/vKjPUrUNY06pui7DwRRpu/BefHx9SpNAoGABNu8DR+6tkK0uCXVe3zwZ8VG8JqZLk/cGhkhzuRkEa7iJ659+k9sTqD2skepd2G6TDwZe32jG/VzMkvyyf4AAnqDTv/Cm/DSSrwOUeNbXfXMLspRRufC2Zx7Dkr2zAaYB0pNcD6+zU5JT3N13c+vtSdoe/0Chjuiej2w1wzPi0ECgYAVNriTd8t/UkuGVSk+JkkT7hkcT8+tCmdIVYpNgSygZjVVlc22yo/GnMJGmlyYJreYIH+mUBjmrb8RdQi/gnKiCeNtrwvQBuqwviQlW9Iqj+vsrYeub9Wpe4h1NLv4ezONQ+UnB2kh2ITKBGW576Ohwo03ESWsAhGHEh0Wq/9SwQ==",
-    "name": "AugmentedLinkedInFun",
+    "name": "NLP Linked CoPilot",
     "version": "1.0",
-    "description": "Replaces LinkedIn user names with 'NPC'.",
+    "description": "Replaces LinkedIn users on the feed with Sesame street characters.",
     "permissions": [
         "tabs",
         "scripting",
@@ -41,10 +41,10 @@
                 "scripts/universal-sentence-encoder.js",
                 "scripts/jquery-3.6.4.slim.min.js",
                 "scripts/jquery-ui.min.js",
-                "scripts/utility.js",
-                "scripts/content.js",
-                "scripts/popup.js"
-            ]
+                "scripts/content.js"
+            ],
+            "all_frames": true,
+            "run_at": "document_end"
         }
     ],
     "web_accessible_resources": [{
@@ -68,5 +68,10 @@
             "suggested_key": "Ctrl+Shift+S",
             "description": "Inject a script on the page"
         }
+    },
+    "icons": {
+      "16": "assets/icons/favicon-16x16.png",
+      "32": "assets/icons/favicon-32x32.png",
+      "48": "assets/icons/mstile-150x150.png"
     }
 }
