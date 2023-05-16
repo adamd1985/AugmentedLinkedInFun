@@ -18,8 +18,8 @@
     "sandbox": {
         "pages": [
             "http://www.linkedin.com"
-            ]
-        },
+        ]
+    },
     "host_permissions": [
         "http://www.linkedin.com/*",
         "https://www.linkedin.com/*"
@@ -37,26 +37,30 @@
                 "*://www.linkedin.com/*"
             ],
             "js": [
-                "scripts/jquery-3.6.4.slim.min.js",
-                "scripts/jquery-ui.min.js",
                 "scripts/content.js"
             ],
             "all_frames": true,
             "run_at": "document_end"
         }
     ],
-    "web_accessible_resources": [{
-        "resources": [ 
-            "assets/bigbird.png", 
-            "assets/count.png",
-            "assets/erniebert.png", 
-            "assets/grouch.png", 
-            "assets/grover.png", 
-            "assets/model.json"
-        ],
-        "matches": [  "*://www.linkedin.com/*" ],
-        "use_dynamic_url": true
-    }],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "assets/bigbird.png",
+                "assets/count.png",
+                "assets/erniebert.png",
+                "assets/grouch.png",
+                "assets/grover.png",
+                "assets/model.json",
+                "scripts/content.js.map",
+                "scripts/service_worker.js.map"
+            ],
+            "matches": [
+                "*://www.linkedin.com/*"
+            ],
+            "use_dynamic_url": true
+        }
+    ],
     "background": {
         "service_worker": "scripts/service_worker.js",
         "type": "module"
@@ -68,8 +72,8 @@
         }
     },
     "icons": {
-      "16": "assets/icons/favicon-16x16.png",
-      "32": "assets/icons/favicon-32x32.png",
-      "48": "assets/icons/mstile-150x150.png"
+        "16": "assets/icons/favicon-16x16.png",
+        "32": "assets/icons/favicon-32x32.png",
+        "48": "assets/icons/mstile-150x150.png"
     }
 }
