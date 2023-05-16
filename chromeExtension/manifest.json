@@ -37,8 +37,6 @@
                 "*://www.linkedin.com/*"
             ],
             "js": [
-                "scripts/tfjs.js",
-                "scripts/universal-sentence-encoder.js",
                 "scripts/jquery-3.6.4.slim.min.js",
                 "scripts/jquery-ui.min.js",
                 "scripts/content.js"

@@ -9,6 +9,7 @@
  */
 import * as use from '@tensorflow-models/universal-sentence-encoder';
 import * as tf from '@tensorflow/tfjs';
+import SavedClassifier from '../../notebooks/models/tfjs/model.json'
 
 const DEFAULT_MODEL_PATH='./model.json'
 
@@ -19,9 +20,9 @@ const DEFAULT_MODEL_PATH='./model.json'
  */
 class ProfileClassifier {
     constructor(path=null) {
-      this.loadModel();
+      this.loadModel(savedClassifier);
 
-      this.modelPath =  path ?? DEFAULT_MODEL_PATH;
+      this.savedClassifier =  savedClassifier;
     }
   
     /**
@@ -31,8 +32,9 @@ class ProfileClassifier {
       console.log('Loading model...');
       
       try {
+        // Chrome will have a different path setup for extensions.
         const modelJsonUrl = await chrome.runtime.getURL(`model.json`);
-        this.model = await tf.loadLayersModel(this.modelPath);
+        this.model = await tf.loadLayersModel(this.savedClassifier);
         this.useModel = await use.load();
 
         tf.tidy(async () => {
@@ -152,7 +154,7 @@ let PROFILE_SCRAPPER = null;
 chrome.runtime.onInstalled.addListener(async function () {
     console.log("CoPilot loaded, models loading and initializing.");
 
-    PROFILE_CLASSIFIER = new ProfileClassifier();
+    PROFILE_CLASSIFIER = new ProfileClassifier(SavedClassifier);
     PROFILE_SCRAPPER = new  ProfileScrapper();
 });
 
