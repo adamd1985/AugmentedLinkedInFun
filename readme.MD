@@ -1,5 +1,7 @@
 # Make Linkedin Fun - with some NLP
 
+![Canva generated image of bigbird using a computer](./articleImages/banner.PNG)
+
 Using NLP constructs with scikit-learn, we will be making our linkedin experience better by transforming a profile description on this social-network, into a Seasame Street character!
 
 We have asked chatGPT to create synthetic LinkedIn profiles of specific professions: HR, crypto entusiasts, business and financial gurus and software engineers. 
@@ -393,7 +395,7 @@ print(f'Resampled Shape: {data.shape}')
 
 data.head()
 ```
-![Samples](head.PNG)
+![Samples](./articleImages/head.PNG)
 
 We then build a tokenizer that removes stop words, whitespace, symbols, and reduces the words to their lemmas:
 
@@ -554,7 +556,7 @@ for idx, label in tqdm(enumerate(labels), "Plot labels"):
 
 plt.show()
 ```
-![NGRAM Frequencies](./ngramFreq.PNG)
+![NGRAM Frequencies](./articleImages/ngramFreq.PNG)
 
 From the chart above, we can see some common ngrams for each label. We should filter out the most overused and rarest ones:
 
@@ -574,7 +576,7 @@ sns.countplot(x=y_train)
 plt.show
 ```
 
-![NGRAM count plots](./plot.PNG)
+![NGRAM count plots](./articleImages/plot.PNG)
 
 In our count plot chart, we notice that our training data is unbalanced, so let's **downsample** to the smallest frequency:
 
@@ -668,11 +670,11 @@ disp = metrics.ConfusionMatrixDisplay(confusion_matrix=cm,
 
 disp.plot()
 ```
-![Scores](./confusion.PNG)
+![Scores](./articleImages/confusion.PNG)
 
 Above 90% is more than perfect for us, the count will be proud!
 
-![Scores](./bestCount.PNG)
+![Scores](./articleImages/bestCount.PNG)
 
 Save our model for the Flask server:
 
@@ -699,7 +701,7 @@ print(f'Predicted: {yy_result_label} at confidece {yy_result_proba[0][yy_result]
     and their probability: {yy_result_proba}')
 ```
 
-![Saved model](./savedModel.PNG)
+![Saved model](./articleImages/savedModel.PNG)
 
 # Serving Models with some Flask
 
@@ -848,13 +850,13 @@ We are almost there!
 
 To run the extension, go to your chrome browser and type `chrome://extensions`. From here click on **Load Unpacked** and select the folder **chromeExtension**:
 
-![Scores](./postman.PNG)
+![Scores](./articleImages/postman.PNG)
 
 Go to your linkedIn, open browser tools console, and see the extension traverser your feed and pickup information.
 
 It will replace the names of people in your network with their classifier as Sesame Street characters, showing that an extension can create an augmented experience:
 
-![Augment LI](./augmentedLi.PNG)
+![Augment LI](./articleImages/augmentedLi.PNG)
 
 Such fun!
 

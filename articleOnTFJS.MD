@@ -1,10 +1,10 @@
 # TensorFlowJS Helps Sesame Street make a Presence on LinkedIn
 
-![Canva generated image of bigbird using a computer](aiGenBBBanner2.PNG)
+![Canva generated image of bigbird using a computer](./articleImages/aiGenBBBanner2.PNG)
 
 Got you there! Google's large language model Bard inspired that title. No way a childrens' show would use such a network for their young audience when they can do better.
 
-A continuation of our previous article: [Make Linkedin Fun — with NLP and Sesame Street](https://medium.com/call-for-atlas/make-linkedin-fun-with-nlp-and-sesame-street-6713d95d567a). We built a scikit-learn python model to joyously convert our network into the Sesame Street crowd. But - we were inefficient with the delivery of the model and predictions.
+A continuation of our previous article: [Make Linkedin Fun — with NLP and Sesame Street](./articleImages/https://medium.com/call-for-atlas/make-linkedin-fun-with-nlp-and-sesame-street-6713d95d567a). We built a scikit-learn python model to joyously convert our network into the Sesame Street crowd. But - we were inefficient with the delivery of the model and predictions.
 
 In this article, we will show you how to construct a Python model using Keras and TensorFlow to replicate an Scikit-learn Python model and prepare it for the web. 
 
@@ -137,7 +137,7 @@ list(test_ds.take(1))[0]
 
 Now we buid the our first text classifying Neural Network (NN), exciting!
 
-![alt](aiGenCharactersCoding.PNG)
+![alt](./articleImages/aiGenCharactersCoding.PNG)
 
 Our NN will have the following layers:
 
@@ -170,7 +170,7 @@ model.summary()
 
 Compiling the model give us:
 
-![alt](image.png)
+![alt](./articleImages/image.png)
 
 ## Fit for the Street
 
@@ -193,7 +193,7 @@ history.history
 
 Note the use of the TQDM progress bar, there is a lot of utility in that addon. With every epoch you can see the model improving:
 
-![alt](epochs.PNG)
+![alt](./articleImages/epochs.PNG)
 
 We need to test the NN with the prepared test dataset from the previous section, and if good enough we should test it with a never seem LinkedIn description:
 
@@ -217,7 +217,7 @@ print(f'\nPredicted character: [{list(LABEL_DICT)[max_proba_idx]}] with probabil
 
 Gives us:
 
-![alt](modelTest.PNG)
+![alt](./articleImages/modelTest.PNG)
 
 This new description is the same one used in the previous article with scikit-learn, the output was Grover at a substantial probability. The output is the same for this NN, therefore we have validated that this will give the same output as the previous model.
 
@@ -297,11 +297,11 @@ testModel();
 
 Which when run with node, will print the following:
 
-![alt](modeJSTest.PNG)
+![alt](./articleImages/modeJSTest.PNG)
 
 The probabilities might not be precisely the same, but the correct class was selected. Not bad! Count Von Count will be satisfied with these numbers.
 
-![alt](cvc.png)
+![alt](./articleImages/cvc.png)
 
 ## Extending the Extension
 
