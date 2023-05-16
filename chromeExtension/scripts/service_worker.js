@@ -9,7 +9,8 @@
  */
 import * as use from '@tensorflow-models/universal-sentence-encoder';
 import * as tf from '@tensorflow/tfjs';
-import SavedClassifier from '../../notebooks/models/tfjs/model.json'
+import SAVED_MODEL from '../../notebooks/models/tfjs/model.json'
+import { error } from 'jquery';
 
 const DEFAULT_MODEL_PATH='./model.json'
 
@@ -19,9 +20,11 @@ const DEFAULT_MODEL_PATH='./model.json'
  * Classifies a linkedin profile to the content.js to manipulate the DOM.
  */
 class ProfileClassifier {
-    constructor(path=null) {
-      this.loadModel(savedClassifier);
-
+    /**
+     * Constructor.
+     * @param {*} savedClassifier The classifier to load from. Can be url string or the json file.
+     */
+    constructor(savedClassifier=null) {
       this.savedClassifier =  savedClassifier;
     }
   
@@ -29,25 +32,35 @@ class ProfileClassifier {
      * Loads USE and custom Models, warms the models up.
      */
     async loadModel() {
-      console.log('Loading model...');
-      
+      console.log('Loading models...');
+      if (!this.savedClassifier){
+        console.error('No model.json to load from!');
+        throw new error("No model.json to load from!")
+      }
       try {
         // Chrome will have a different path setup for extensions.
-        const modelJsonUrl = await chrome.runtime.getURL(`model.json`);
-        this.model = await tf.loadLayersModel(this.savedClassifier);
+        console.log(`Loading USE model...`)
         this.useModel = await use.load();
+
+        console.log(`Loading custom model...`)
+        this.model = await tf.loadLayersModel(this.savedClassifier);
 
         tf.tidy(async () => {
             // Warms up the models by causing intermediate tensor values to be built.
             const startTime = performance.now();
             this.useModel.embed(["Test descriptions"])
                 .then((embeddings) => {
+                    console.log(`Successfully embeded test text: ${embeddings}. Running prediction.`);
                     return this.model.predict(embeddings)
-            })
-            .then((result) => {
-                const totalTime = Math.floor(performance.now() - startTime);
-                console.log(`Model loaded with ${result}, initialized in ${totalTime} ms...`);
-            })
+                })
+                .then((result) => {
+                    console.log(`Model loaded with ${result}.`);   
+                })
+                .catch((e) => console.error(`Error predicting models: ${e}`))
+                .finally(() => {
+                    const totalTime = Math.floor(performance.now() - startTime);
+                    console.log(`Models initialized in ${totalTime} ms...`);
+                })
         });
       } catch (e) {
         console.error('Unable to load models', e);
@@ -109,7 +122,6 @@ async function getProfile() {
  */
 class ProfileScrapper {
     constructor() {
-      this.loadModel();
     }
 
     /**
@@ -150,12 +162,16 @@ let PROFILE_SCRAPPER = null;
 
 /**
  * Extension load.
+ * 
+ * Will initialize everything here.
  */
 chrome.runtime.onInstalled.addListener(async function () {
     console.log("CoPilot loaded, models loading and initializing.");
 
-    PROFILE_CLASSIFIER = new ProfileClassifier(SavedClassifier);
+    PROFILE_CLASSIFIER = new ProfileClassifier("https://raw.githubusercontent.com/adamd1985/AugmentedLinkedInFun/master/notebooks/models/tfjs/model.json");
     PROFILE_SCRAPPER = new  ProfileScrapper();
+
+    PROFILE_CLASSIFIER.loadModel();
 });
 
 /**

@@ -24,5 +24,12 @@
     "jquery": "3.6.4",
     "jsdom": "21.1.1",
     "xpath": "0.0.32"
+  },
+  "targets": {
+    "default": {
+      "sourceMap": {
+        "inline": true
+      }
+    }
   }
 }

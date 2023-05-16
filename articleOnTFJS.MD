@@ -243,11 +243,7 @@ Install the required packages for the convertor:
 Run the convertion script (remember the paths from the save in the previous section):
 ```bash
 tensorflowjs_converter \
-    --skip_op_check \
     --input_format=tf_saved_model \
-    --output_format=tfjs_graph_model \
-    --signature_name=serving_default \
-    --saved_model_tags=serve \
     models/tf \
     models/tfjs
 ```
