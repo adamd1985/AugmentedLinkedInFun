@@ -97,13 +97,18 @@ def clean_sentence(original_text):
 
 X_cleaned = X.progress_apply(lambda text: clean_sentence(text))
 ```
-Split the dataset into *train*, *validation* and *test*:
+
+Split the dataset into *train*, *validation* and *test* while converting text to embeddings:
+
 ```python
 import tensorflow as tf
 from tensorflow.data import Dataset, AUTOTUNE
+import tensorflow_hub as hub
+
+EMBED = hub.load("https://tfhub.dev/google/universal-sentence-encoder/4")
 
 def text_to_dataset(texts,labels):
-    return Dataset.from_tensor_slices((texts, labels.tolist())).cache().batch(hparams['batch_size']).prefetch(AUTOTUNE)
+    return Dataset.from_tensor_slices((EMBED(texts), labels.tolist())).cache().batch(hparams['batch_size'],drop_remainder=True).prefetch(AUTOTUNE)
 
 VAL_SIZE = int(len(X)*0.3)
 
@@ -121,12 +126,13 @@ y_test = y_val[TEST_SIZE:]
 x_val = x_val[:TEST_SIZE]
 y_val = y_val[:TEST_SIZE]
 
+print(f'Sizes for TEST: {TEST_SIZE}, validation: {VAL_SIZE} and train: {len(X) - VAL_SIZE}')
+
 train_ds = text_to_dataset(x_train, y_train)
 val_ds = text_to_dataset(x_test, y_test)
 test_ds = text_to_dataset(x_val, y_val)
 
-# get top 5 elements of this prefectched slice.
-list(train_ds.take(1))[0][1][:5]
+list(test_ds.take(1))[0]
 ```
 
 Now we buid the our first text classifying Neural Network (NN), exciting!
@@ -135,28 +141,19 @@ Now we buid the our first text classifying Neural Network (NN), exciting!
 
 Our NN will have the following layers:
 
-- The input layer for the NN will be the USE model, which it will automatically download from the given URL with tensorflow HUB. The output of this layer is 512DIM word embeddings.
+- The input layer for the NN will be the USE model embeddings previously generated. The input shape of this layer is 512DIM word embeddings and the batchsize configured.
 - A hidden layer in the middle will help us reduce dimensionality to 1/2 and uses a sigmoid activation function. The sigmoid is analogous to the linear regression applied in the previous article with Scikit-learn.
 - We apply a normalization function after the previous activation, to reduce shifts in our weights with every training epoch.
 - Finally, we map the NN's outputs to the 5 classes we set up in the previous article, and output the probability through a softmax activation function.
 
 ```python
-import tensorflow_hub as hub
-
-USE_URL = "https://tfhub.dev/google/universal-sentence-encoder/4"
-
 model = keras.Sequential(
     [
-        hub.KerasLayer(USE_URL,
-                    output_shape=[hparams['embedding_dim']], 
-                    input_shape=[],     
-                    dtype=tf.string,
-                    name="in_pretrained",
-                    trainable=hparams['embedding_trainable']),
-        layers.Dense(int(hparams['embedding_dim']/4), activation="sigmoid", name="layer2"),
-        layers.Dropout(hparams['dropout_rate']),
-        layers.BatchNormalization(),
-        layers.Dense(len(LABEL_DICT), activation="softmax", name="out")
+        layers.InputLayer(input_shape=(512,),batch_size=hparams['batch_size'], name="in_embeddings"),
+        layers.Dense(int(hparams['embedding_dim']/4),batch_size=hparams['batch_size'], activation="sigmoid", name="layer1"),
+        layers.Dropout(hparams['dropout_rate'],batch_size=hparams['batch_size'], name="drop"),
+        layers.BatchNormalization(batch_size=hparams['batch_size']),
+        layers.Dense(len(LABEL_DICT),batch_size=hparams['batch_size'], activation="softmax", name="out")
     ]
 )
 
@@ -185,7 +182,7 @@ import tensorflow_addons as tfa
 tqdm_callback = tfa.callbacks.TQDMProgressBar()
 
 history = model.fit(train_ds, 
-                    epochs=4, 
+                    epochs=10, 
                     verbose = 10,
                     validation_data = val_ds,
                     callbacks=[tqdm_callback]
@@ -206,7 +203,8 @@ from math import floor
 print("Evaluating test data")
 print(model.evaluate(test_ds, batch_size=hparams['batch_size']))
 
-job_titles = ["IT Consultant at Sesame Street, lord of Java Code, who likes to learn new stuff and tries some machine learning in my free engineering time."]
+# Remember all our imputs need to be embedded first!
+job_titles = EMBED(["IT Consultant at Sesame Street, lord of Java Code, who likes to learn new stuff and tries some machine learning in my free engineering time."])
 
 print("\nEvaluating new Description")
 probas = model.predict(job_titles)[0]
@@ -223,11 +221,131 @@ Gives us:
 
 This new description is the same one used in the previous article with scikit-learn, the output was Grover at a substantial probability. The output is the same for this NN, therefore we have validated that this will give the same output as the previous model.
 
+With everything validated, let's save the model in the full tensorflow format, and reload it to validate it works:
+```python
+MODEL_PATH = 'models/tf'
+
+model.save(MODEL_PATH)
+
+model = keras.models.load_model(MODEL_PATH)
+model.predict(job_titles)
+```
+
+You'll have to install some dependencies, namely: `pip install pyyaml h5py` to allow tensorflow to save the model or raw weights.
+
 # From Python to Javascript
 
-Enough with the snake, let's do some nice webapps.
+Enough with the snake, let's do some webapps.
+
+Install the required packages for the convertor:
+`pip install tensorflowjs[convertor]`
+
+Run the convertion script (remember the paths from the save in the previous section):
+```bash
+tensorflowjs_converter \
+    --skip_op_check \
+    --input_format=tf_saved_model \
+    --output_format=tfjs_graph_model \
+    --signature_name=serving_default \
+    --saved_model_tags=serve \
+    models/tf \
+    models/tfjs
+```
+
+Using nodejs, we will test the model by loading it and running a prediction. 
+
+Install the required modules: `npm install @tensorflow/tfjs @tensorflow/tfjs-node @tensorflow-models/universal-sentence-encoder`
+
+Your package.json should be similar to this:
+```json
+{
+  "dependencies": {
+    "@tensorflow-models/universal-sentence-encoder": "^1.3.3",
+    "@tensorflow/tfjs": "^4.5.0",
+    "@tensorflow/tfjs-node": "^4.5.0",
+    "jquery": "^3.6.4",
+    "jsdom": "^21.1.1",
+    "xpath": "^0.0.32"
+  }
+}
+```
+
+In a javascript test file, we load the USE model to create embeddings (this will be the java variant of the model) and test the same linkedin title from the python notebook:
+
+```javascript
+const tf = require("@tensorflow/tfjs");
+const tfn = require("@tensorflow/tfjs-node");
+const use = require('@tensorflow-models/universal-sentence-encoder');
+
+const handler = tfn.io.fileSystem('./notebooks/models/tfjs/model.json');
+
+async function testModel(){
+    const model = await tf.loadLayersModel(handler);
+
+    const useModel = await use.load();
+    const embeddings = await useModel.embed(["IT Consultant at Sesame Street, lord of Java Code, who likes to learn new stuff and tries some machine learning in my free engineering time."])
+
+    const t = await model.predict(embeddings);
+
+    // {'bigbird': 0, 'count': 1, 'grover': 2, 'grouch': 3, 'erniebert': 4}
+    // [0.00236707 0.00669724 0.9246539  0.06278326 0.00349861]
+    console.log(`Prediction from JS vs PY: \nJS - ${t.dataSync()}\nPY - 0.00236707, 0.00669724, 0.9246539, 0.06278326, 0.00349861`);
+}
+
+testModel();
+```
+
+Which when run with node, will print the following:
+
+![alt](modeJSTest.PNG)
+
+The probabilities might not be precisely the same, but the correct class was selected. Not bad! Count Von Count will be satisfied with these numbers.
+
+![alt](cvc.png)
+
+## Extending the Extension
+
+The model needs to be plugged within the extensions background script. We will be building on the chrome extension done in the previous article.
+
+To do this, we have to download the minified tensorflow libraries and the USE model used in the previous section, you can find them in these URLs:
+- https://cdn.jsdelivr.net/npm/@tensorflow/tfjs
+- https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-node
+- https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder
+
+And update the manifest.json file to include the tensorflow scripts and the model.json with our model's definitions to be loaded again:
+```json
+"content_scripts": [
+    {
+        "matches": [
+            "*://www.linkedin.com/*"
+        ],
+        "js": [
+            "scripts/tfjs.js",
+            "scripts/tfjs-node.js",
+            "scripts/universal-sentence-encoder.js",
+            "scripts/jquery-3.6.4.slim.min.js",
+            "scripts/jquery-ui.min.js",
+            "scripts/utility.js",
+            "scripts/content.js",
+            "scripts/popup.js"
+        ]
+    }
+    ...
+    "web_accessible_resources": [{
+        "resources": [ "assets/bigbird.png", "assets/count.png","assets/erniebert.png", "assets/grouch.png", "assets/grover.png", "assets/model.json" ],
+        "matches": [  "*://www.linkedin.com/*" ],
+        "use_dynamic_url": true
+    }],
+],
+```
 
 
+https://github.com/tensorflow/tfjs/issues/7554 
+
+https://stackoverflow.com/questions/20435528/chrome-extension-sendresponse-does-not-work
+
+https://developer.chrome.com/docs/extensions/reference/runtime/#method-sendMessage
+https://hpssjellis.github.io/beginner-tensorflowjs-examples-in-javascript/tfjs-models/universal-sentence-encoder/index.html
 
 # Conclusion
 
@@ -241,6 +359,8 @@ The extension scrapes linked in, but up to a maximum of 5 profiles. Linkedin wil
 - https://js.tensorflow.org/api/latest/
 - https://bard.google.com/ 
 - https://www.kaggle.com/
+- https://www.tensorflow.org/js/guide/conversiontensorflowjs_converter 
+- https://www.npmjs.com/package/@tensorflow/tfjs-converter 
 
 ## Github
 

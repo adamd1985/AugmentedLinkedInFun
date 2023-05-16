@@ -57,24 +57,18 @@ class LinkedInCoPilot{
         }
       }
 
+      console.log(`Processing these profiles: ${profiles}`)
       let promises = [];
       profiles.forEach(function( profile) {
         if (!profile)
           return
 
-        const data = {
+        const profiledata = {
           'descriptions': (profile.posts?.join(' ') ?? ' ') + profile.titles,
         };
-
+        console.log(`Predicting for ${profile}`);
         promises.push(
-          fetch('http://127.0.0.1:800/profile', {
-            method: "POST", 
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(data), 
-          })
-          .then(response=>response.json())
+          chrome.runtime.sendMessage(profiledata)
           .then((data) => {
             $(`div.visually-hidden`).each(async (index, element) => {
               try{
@@ -265,8 +259,9 @@ class LinkedInCoPilot{
       if (cachedProfiles && cachedProfiles.length > 0){
         // If already scraped, we can skip it.
         for(let cp of cachedProfiles){
-          if(cp.link == link){
-            profile = cp; 
+          if(cp && cp.link == link){
+            profile = cp;
+            console.log(`Found cached profile: ${profile}`)
             cachedLinks.push(link)
             break;
           }
@@ -287,7 +282,7 @@ class LinkedInCoPilot{
       let _link = link;
       let response = await fetch(link);
       profile = await response.text();
-      let call = chrome.runtime.sendMessage({ link: link }).then(response => {
+      let call = chrome.runtime.sendMessage({ link: link }).then((response) => {
         let profile = response?.profile;
         let profileObj = null;
         if (profile) {
@@ -296,6 +291,7 @@ class LinkedInCoPilot{
             profileObj.link = _link;
           }
         }
+        console.log(`Got a profileObj: ${profileObj} from ${response}`);
         return Promise.resolve(profileObj);
       });
       calls.push(call)
@@ -347,6 +343,7 @@ class LinkedInCoPilot{
     profiles = await this.getProfilesDetailsFromLinks(links, profiles)
 
     console.log(`We scraped this number of profiles: ${profiles.length}`)
+    console.log(`Head of profiles: ${profiles[0]}`)
 
     // cach in case of failure, we can just revert.
     this.cacheFindings(profiles)

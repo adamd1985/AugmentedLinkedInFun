@@ -168,3 +168,16 @@ notebooks/data/messagesForX.txt
 notebooks/output/model/variables/variables.index
 *.1
 *.0
+
+node_modules
+dist*
+.cache
+yarn-error.log
+*.tgz
+*-ubyte
+*.pyc
+.yalc
+.DS_STORE
+yalc.lock
+*firebase-debug.log
+**/.parcel-cache

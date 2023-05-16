@@ -11,6 +11,15 @@
         "notifications",
         "storage"
     ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self';",
+        "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+    },
+    "sandbox": {
+        "pages": [
+            "http://www.linkedin.com"
+            ]
+        },
     "host_permissions": [
         "http://www.linkedin.com/*",
         "https://www.linkedin.com/*"
@@ -28,6 +37,8 @@
                 "*://www.linkedin.com/*"
             ],
             "js": [
+                "scripts/tfjs.js",
+                "scripts/universal-sentence-encoder.js",
                 "scripts/jquery-3.6.4.slim.min.js",
                 "scripts/jquery-ui.min.js",
                 "scripts/utility.js",
@@ -37,7 +48,14 @@
         }
     ],
     "web_accessible_resources": [{
-        "resources": [ "assets/bigbird.png", "assets/count.png","assets/erniebert.png", "assets/grouch.png", "assets/grover.png" ],
+        "resources": [ 
+            "assets/bigbird.png", 
+            "assets/count.png",
+            "assets/erniebert.png", 
+            "assets/grouch.png", 
+            "assets/grover.png", 
+            "assets/model.json"
+        ],
         "matches": [  "*://www.linkedin.com/*" ],
         "use_dynamic_url": true
     }],

@@ -14,6 +14,15 @@
             "program": "${workspaceFolder}\\testUtility.js"
         },
         {
+            "type": "node",
+            "request": "launch",
+            "name": "Node tsjs",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}\\tsjs_test.js"
+        },
+        {
             "name": "Flask",
             "type": "python",
             "request": "launch",
