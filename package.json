@@ -9,6 +9,7 @@
     "watch": "npm run copy && parcel watch chromeExtension/scripts/service_worker.js --dist-dir dist/scripts/"
   },
   "devDependencies": {
+    "@tensorflow/tfjs-node": "^4.5.0",
     "buffer": "5.7.1",
     "clang-format": "1.2.3",
     "parcel": "2.3.2",

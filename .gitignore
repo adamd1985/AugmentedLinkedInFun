@@ -162,13 +162,15 @@ cython_debug/
 **/cache
 *.h5
 notebooks/data/messagesForX.txt
-*.bin
+notebooks/models/tf
+notebooks/models/tf/**/*
 *.pb
 *.data-00000-of-00001
 notebooks/output/model/variables/variables.index
 *.1
 *.0
-
+notebooks/roberta-retrained
+notebooks/roberta-retrained/**/*
 **/node_modules
 **/node_modules/*
 dist*
