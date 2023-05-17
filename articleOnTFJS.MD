@@ -168,9 +168,11 @@ model.compile(
 model.summary()
 ```
 
-Compiling the model give us:
+Tensorflow is comprised of these such building blocks, and once you get comfortable with them, you have no end to the AI functionality you can create.
 
-![alt](./articleImages/image.png)
+Compiling the model give us this:
+
+![alt](./articleImages/compiledNN.PNG)
 
 ## Fit for the Street
 
@@ -248,8 +250,16 @@ tensorflowjs_converter \
     models/tfjs
 ```
 
-Using nodejs, we will test the model by loading it and running a prediction. 
+To understand some of the details, let's go in depth of what is happening:
+- Calling `model.save()` persists our model in a **SavedModel** format. 
+- In the saved **1GB** directory, there will be the: trained params, protobuff binaries, and checkpoint model saves. 
+- You don't need to rebuild and retrain the model, a `tf.keras.models.load_model()` will serve it fully functional again. We won't reload it in python though.
+- `tensorflowjs_converter` or its equivalent APIs will prepare the python binary for JS. `input_format=tf_saved_model` tells it that our original model was in a **SavedModel** format, the output of this convertor will be the same.
+- The convertor creates a JSON descriptor of the model, and saves the wieght in a .BIN format - Both have to **exist in the same folder** for the model to be correctly loaded.
+- Because of its format, in JS we need to call the API `loadGraphModel()` to load the model.
+- The JS model variant will be 272KB, the graph optimized by the converter to be as small as possible for devices and web.
 
+Using nodejs, let's test the model convertion by loading it and running a prediction. 
 Install the required modules: `npm install @tensorflow/tfjs @tensorflow/tfjs-node @tensorflow-models/universal-sentence-encoder`
 
 Your package.json should be similar to this:
@@ -295,6 +305,7 @@ Which when run with node, will print the following:
 
 ![alt](./articleImages/modeJSTest.PNG)
 
+
 The probabilities might not be precisely the same, but the correct class was selected. Not bad! Count Von Count will be satisfied with these numbers.
 
 ![alt](./articleImages/cvc.png)
@@ -303,51 +314,322 @@ The probabilities might not be precisely the same, but the correct class was sel
 
 The model needs to be plugged within the extensions background script. We will be building on the chrome extension done in the previous article.
 
-To do this, we have to download the minified tensorflow libraries and the USE model used in the previous section, you can find them in these URLs:
-- https://cdn.jsdelivr.net/npm/@tensorflow/tfjs
-- https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-node
-- https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder
+There will be many changes from the previous article's code, as we have changed the way we import our libraries. Previously it was through minified JS files imported via the `manifest.json`. Now it's a module setup, packaged by the build tool **Parcel**.
 
-And update the manifest.json file to include the tensorflow scripts and the model.json with our model's definitions to be loaded again:
+Since Parcel will be minifying our JS, it's best to include the map files to allow us to debug the code. Note the **'type'** change to **module**:
 ```json
-"content_scripts": [
-    {
-        "matches": [
-            "*://www.linkedin.com/*"
-        ],
-        "js": [
-            "scripts/tfjs.js",
-            "scripts/tfjs-node.js",
-            "scripts/universal-sentence-encoder.js",
-            "scripts/jquery-3.6.4.slim.min.js",
-            "scripts/jquery-ui.min.js",
-            "scripts/utility.js",
-            "scripts/content.js",
-            "scripts/popup.js"
-        ]
-    }
-    ...
-    "web_accessible_resources": [{
-        "resources": [ "assets/bigbird.png", "assets/count.png","assets/erniebert.png", "assets/grouch.png", "assets/grover.png", "assets/model.json" ],
-        "matches": [  "*://www.linkedin.com/*" ],
-        "use_dynamic_url": true
-    }],
-],
+"web_accessible_resources": [
+        {
+            "resources": [
+                "assets/bigbird.png",
+                "assets/count.png",
+                "assets/erniebert.png",
+                "assets/grouch.png",
+                "assets/grover.png",
+                "assets/model.json",
+                "scripts/content.js.map",
+                "scripts/service_worker.js.map"
+            ],
+            "matches": [
+                "*://www.linkedin.com/*"
+            ],
+            "use_dynamic_url": true
+        }
+    ],
+    "background": {
+        "service_worker": "scripts/service_worker.js",
+        "type": "module"
+    },
 ```
 
+We add a class to load, warm up and run the models in our service worker:
 
-https://github.com/tensorflow/tfjs/issues/7554 
+```javascript
+import * as use from '@tensorflow-models/universal-sentence-encoder';
+import * as tf from '@tensorflow/tfjs';
+import * as tfc from '@tensorflow/tfjs-converter'
 
-https://stackoverflow.com/questions/20435528/chrome-extension-sendresponse-does-not-work
+...
 
-https://developer.chrome.com/docs/extensions/reference/runtime/#method-sendMessage
-https://hpssjellis.github.io/beginner-tensorflowjs-examples-in-javascript/tfjs-models/universal-sentence-encoder/index.html
+/**
+ * Async loads a USE and our Custom models on construction.  
+ * 
+ * Classifies a linkedin profile to the content.js to manipulate the DOM.
+ */
+class ProfileClassifier {
+    /**
+     * Constructor.
+     * @param {*} savedClassifier The classifier to load from. Can be url string or the json file.
+     */
+    constructor(savedClassifier = null) {
+        this.savedClassifier = savedClassifier;
+    }
+
+    /**
+     * Loads USE and custom Models, warms the models up.
+     */
+    async loadModel() {
+        console.log('Loading models...');
+        if (!this.savedClassifier) {
+            console.error('No model.json to load from!');
+            throw new Error("No model.json to load from!")
+        }
+        try {
+            // Chrome will have a different path setup for extensions.
+            console.log(`Loading USE model...`)
+            this.useModel = await use.load();
+
+            console.log(`Loading custom model...`)
+            this.model = await tfc.loadGraphModel(this.savedClassifier);
+
+            // Warms up the models by causing intermediate tensor values to be built.
+            const startTime = performance.now();
+            tf.tidy(() => {
+                const embeddings = await this.useModel.embed(["Test descriptions"])
+                const result = await this.model.predict(embeddings);
+
+                console.log(`Model loaded with ${result}.`);
+            });
+            const totalTime = Math.floor(performance.now() - startTime);
+            console.log(`Models initialized in ${totalTime} ms...`);
+        } catch (e) {
+            console.error('Unable to load models', e);
+        }
+    }
+
+    ...
+}
+```
+
+Tensorflow's tidy() API provides memory management to avoid the risk of leaks in the browser. This is optional, but if you are to use this API, **you cannot have unresolved Promises** within its closure. This initialization will happen on the extension's load, warming the model by having it cache weights and other layer artefacts on a test prediction.
+
+Within the class, we also need an API to predict:
+
+```javascript
+class ProfileClassifier {
+    ...
+
+    /**
+     * Triggers our models to make a prediction.
+     * @param {descriptions} string Profile title and descriptions.
+     * @param {sendResponse} function messaging callback to reply to the content script.
+     */
+    async classifyProfile(descriptions, sendResponse) {
+        if (!descriptions) {
+            console.error('No descriptions.  No prediction.');
+            return;
+        }
+        if (!this.model || !this.useModel) {
+            console.log('Waiting for models to load...');
+            setTimeout(
+                () => { this.classifyProfile(descriptions, sendResponse) }, 2000);
+            return;
+        }
+        console.log(`Predicting for ${descriptions}`);
+        const startTime = performance.now();
+
+        const predictions = tf.tidy(() => {
+            const embeddings = await this.useModel.embed([descriptions]);
+            console.log(`embeddings: ${embeddings}`);
+            const t = await this.model.predict(embeddings);
+            return t.dataSync();
+        });
+        
+        console.log(`predictions: ${predictions}`);
+
+        const totalTime = performance.now() - startTime;
+        console.log(`Done in ${totalTime.toFixed(1)} ms `);
+
+        const LABELS = ["bigbird", "count", "grover", "grouch", "erniebert"];
+        const idx = predictions.reduce((iMax, x, i, arr) => x > arr[iMax] ? i : iMax, 0);
+
+        sendResponse({ 'proba': Math.floor(predictions[idx] * 100), 'label': (LABELS[idx] ?? "N/A") });
+    }
+
+    ...
+}
+```
+
+Let's add this to our handler function in the service worker:
+```javascript
+// Global variables.
+const PROFILE_CLASSIFIER = new ProfileClassifier("https://raw.githubusercontent.com/adamd1985/AugmentedLinkedInFun/master/notebooks/models/tfjs/model.json");
+const PROFILE_SCRAPPER = new ProfileScrapper();
+PROFILE_CLASSIFIER.loadModel();
+
+...
+
+/**
+ * Message handler.
+ * If we return TRUE, we are informing chrome that the result of the call will happen asynch.
+ */
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!PROFILE_SCRAPPER || !PROFILE_CLASSIFIER) {
+        throw new Error("Classes are null!");
+    }
+
+    console.log(`Message from ${sender}: ${JSON.stringify(message)}`)
+    if (message?.link) {
+        PROFILE_SCRAPPER.scrapeProfile(message.link, sendResponse);
+    }
+    else if (message?.descriptions) {
+        PROFILE_CLASSIFIER.classifyProfile(message.descriptions, sendResponse);
+    }
+    else {
+        console.warn(`An unknown message ${message} was received.`);
+        return false;
+    }
+    return true;
+});
+
+```
+
+The **content.js** script injected in our linkedin feed also needs an update to call these predictions:
+```javascript
+/**
+   * Augment the linkedin experience by adding info or visual cues.
+   * All will happen async as they  call our classification server.
+   * @param {*} profiles 
+   */
+  async augmentLinkedInExperience(profiles) {
+    async function _augmentText(element, profile, data) {
+      if ($(element).data("scanned")) {
+        return;
+      }
+
+      let search = `^${profile.user}$`;
+      let re = new RegExp(search, "g");
+
+      $(element).data("scanned", true);
+      let text = $(element).text().trim();
+      if (text.match(re)) {
+        if (data['proba'] && data['proba'] >= 0) {
+          $(element).text(`${text} [${data['proba']}% as ${data['label']}]`);
+        }
+      }
+    }
+
+    async function _augmentImage(element, profile, data) {
+      // TODO: Inefficient, will load all images for each profile.
+      // Use tokens to discern if this image is related to the profile.
+      if ($(element).attr('ghost-person')) {
+        return;
+      }
+      let name = $(element).attr('alt')
+      if (!name) {
+        return;
+      }
+      name = name.trim().toLocaleLowerCase();
+      if (!name.includes("photo") && !name.includes("profile") && !name.includes(profile.user.toLocaleLowerCase())) {
+        return;
+      }
+      const tokens = profile.user.toLocaleLowerCase().split(" ");
+      for (const tok of tokens) {
+        if (name.includes(tok)) {
+          const imgUrl = await chrome.runtime.getURL(`assets/${data['label']}.png`)
+          $(element).attr('href', imgUrl);
+          $(element).attr('src', imgUrl);
+          break;
+        }
+      }
+    }
+
+    async function _augmenGhostImage(element, profile, data, image) {
+      try {
+        const url = await chrome.runtime.getURL(`assets/${data['label']}.png`)
+
+        $(element).empty();
+        if (image) {
+          let name = $(element).attr('alt')
+          if (!name) {
+            return;
+          }
+          name = name.trim().toLocaleLowerCase();
+          if (!name.includes("photo") && !name.includes("profile") && !name.includes(profile.user.toLocaleLowerCase())) {
+            return;
+          }
+          const tokens = profile.user.toLocaleLowerCase().split(" ");
+          for (const tok of tokens) {
+            if (name.includes(tok)) {
+              $(element).attr('src', url);
+              $(element).attr('href', url);
+              break;
+            }
+          }
+        }
+        else {
+          let found = $(`div:contains("${profile.user}")`, element).first();
+          if (found) {
+            const img = `<img src="${url}" alt="${profile.user}'s photo" id="ember23" class="EntityPhoto-circle-3 evi-image ember-view" href="${url}">`;
+            $(element).html(img);
+          }
+        }
+      }
+      catch (e) {
+        console.error(e);
+      }
+    }
+
+    console.log(`Processing these profiles: ${profiles}`)
+    let promises = [];
+    profiles.forEach(function (profile) {
+      if (!profile)
+        return
+
+      const profiledata = {
+        'descriptions': (profile.posts?.join(' ') ?? ' ') + profile.titles,
+      };
+      console.log(`Predicting for ${profile}`);
+      promises.push(
+        chrome.runtime.sendMessage(profiledata)
+          .then((data) => {
+            console.log(`For ${profile.user}: Label: ${data['label']} Proba: ${data['proba']}`);
+
+            $(`div.ivm-view-attr__ghost-entity`).each(async (index, element) => {
+              _augmenGhostImage(element, profile, data, false);
+            });
+            $(`img.ghost-person`).each(async (index, element) => {
+              _augmenGhostImage(element, profile, data, true);
+            });
+            $(`img`).each(async (index, element) => {
+              _augmentImage(element, profile, data)
+            });
+            $(`h1.text-heading-xlarge:contains("${profile.user}")`).each((index, element) => {
+              _augmentText(element, profile, data);
+            });
+            $(`div:contains("${profile.user}")`).each((index, element) => {
+              _augmentText(element, profile, data);
+            });
+            $(`span:contains("${profile.user}")`).each((index, element) => {
+              _augmentText(element, profile, data);
+            });
+            $(`a:contains("${profile.user}")`).each((index, element) => {
+              _augmentText(element, profile, data);
+            });
+          }).catch((error) => {
+            console.log('Error: ', error);
+          })
+      );
+    });
+  }
+```
+
+Once we have all profile data scraped, we call the api above, which sends a message to the background service worker to do the predictions - without affecting the experience of using the website itself (everything should be asynch and failure-proof).
+
+If everything is done right, we will get this:
+
+![alt](./articleImages/linkedInSuccess.PNG)
+
 
 # Conclusion
 
-We learned how to create an extension and how to use NLP to make our linkedin more fun!
+We incremented our code and knowledge from the last article: [Make Linkedin Fun — with NLP and Sesame Street](./articleImages/https://medium.com/call-for-atlas/make-linkedin-fun-with-nlp-and-sesame-street-6713d95d567a) by learning how to use tensorflow, and its device/web APIs tensorflowJS.
 
-The extension scrapes linked in, but up to a maximum of 5 profiles. Linkedin will ban your account if you abuse the site, so be a good citizen when you do scraping.
+Unlike our scikit-learn model, with tensorflow we built a lightwieght neural-network to emulate the linear regression model in the previous article. The models, which are usually quite sizable and only run in an external server, can now be served in the web at a smalled size of KBs not GBs!
+
+Finally, here is an artistic interpretation of bigbird learning tensorflow to end your lesson:
+
+![alt](./articleImages/aiBigBird.jpg)
 
 ## References
 
@@ -357,6 +639,7 @@ The extension scrapes linked in, but up to a maximum of 5 profiles. Linkedin wil
 - https://www.kaggle.com/
 - https://www.tensorflow.org/js/guide/conversiontensorflowjs_converter 
 - https://www.npmjs.com/package/@tensorflow/tfjs-converter 
+- https://parceljs.org/
 
 ## Github
 
